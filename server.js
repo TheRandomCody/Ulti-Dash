@@ -87,7 +87,6 @@ app.get('/auth/discord/callback', async (req, res) => {
         if (user) {
             user.ipHistory.push(ipLog);
             await user.save();
-            console.log(`Existing user logged in: ${user.username}`);
             destination = '/dashboard.html';
         } else {
             user = new User({
@@ -98,11 +97,9 @@ app.get('/auth/discord/callback', async (req, res) => {
                 isVerified: false
             });
             await user.save();
-            console.log(`New user created: ${user.username}`);
             destination = `/complete-profile.html?discordId=${discordUser.id}`;
         }
         
-        // Redirect to a special callback page on the frontend to store the token
         res.redirect(`https://www.ulti-bot.com/auth-callback.html?accessToken=${accessToken}&destination=${encodeURIComponent(destination)}`);
 
     } catch (error) {
@@ -111,8 +108,56 @@ app.get('/auth/discord/callback', async (req, res) => {
     }
 });
 
-// --- API ROUTES (No changes needed here) ---
-// ... your existing /api/user/complete-profile, /api/settings, etc. routes
+// --- NEW AUTHENTICATED API ROUTES ---
+
+// Middleware to verify the access token for protected routes
+const verifyToken = (req, res, next) => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1]; // Bearer <TOKEN>
+
+    if (token == null) return res.sendStatus(401); // if there isn't any token
+
+    // We will just pass the token to the next route. 
+    // The actual verification happens by using the token to talk to Discord's API.
+    req.token = token;
+    next();
+};
+
+// GET: The route for the dashboard to fetch the logged-in user's Discord info
+app.get('/api/auth/user', verifyToken, async (req, res) => {
+    try {
+        const userResponse = await axios.get('https://discord.com/api/users/@me', {
+            headers: { 'Authorization': `Bearer ${req.token}` }
+        });
+        res.json(userResponse.data);
+    } catch (error) {
+        console.error("Failed to fetch user from Discord API");
+        res.sendStatus(403); // Token is likely invalid or expired
+    }
+});
+
+// GET: The route for the dashboard to fetch the user's servers
+app.get('/api/auth/guilds', verifyToken, async (req, res) => {
+    try {
+        const guildsResponse = await axios.get('https://discord.com/api/users/@me/guilds', {
+            headers: { 'Authorization': `Bearer ${req.token}` }
+        });
+        
+        // Filter to only show servers where the user can manage the server
+        const manageableGuilds = guildsResponse.data.filter(guild => {
+            const permissions = BigInt(guild.permissions);
+            return (permissions & 8n) === 8n; // 8n is the bit for ADMINISTRATOR
+        });
+
+        res.json(manageableGuilds);
+    } catch (error) {
+        console.error("Failed to fetch guilds from Discord API");
+        res.sendStatus(403);
+    }
+});
+
+// --- Other API routes (no changes needed) ---
+// ...
 
 // --- START THE SERVER ---
 app.listen(port, () => {
