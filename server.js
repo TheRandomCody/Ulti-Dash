@@ -12,6 +12,7 @@ const port = process.env.PORT || 3000;
 const mongoURI = process.env.MONGO_URI;
 const clientId = process.env.CLIENT_ID;
 const clientSecret = process.env.CLIENT_SECRET;
+const botToken = process.env.BOT_TOKEN; // New: Get the bot token for API calls
 const redirectUri = 'https://api.ulti-bot.com/auth/discord/callback';
 
 // --- MIDDLEWARE ---
@@ -128,7 +129,7 @@ const verifyToken = (req, res, next) => {
     next();
 };
 
-// GET: The route for the dashboard to fetch the logged-in user's Discord info
+// GET: Fetch logged-in user's Discord info
 app.get('/api/auth/user', verifyToken, async (req, res) => {
     try {
         const userResponse = await axios.get('https://discord.com/api/users/@me', {
@@ -141,28 +142,37 @@ app.get('/api/auth/user', verifyToken, async (req, res) => {
     }
 });
 
-// GET: The route for the dashboard to fetch the user's servers
+// GET: Fetch user's servers where they are an admin AND the bot is also present
 app.get('/api/auth/guilds', verifyToken, async (req, res) => {
     try {
-        const guildsResponse = await axios.get('https://discord.com/api/users/@me/guilds', {
+        // Fetch servers the user is in
+        const userGuildsResponse = await axios.get('https://discord.com/api/users/@me/guilds', {
             headers: { 'Authorization': `Bearer ${req.token}` }
         });
-        
-        const manageableGuilds = guildsResponse.data.filter(guild => {
-            const permissions = BigInt(guild.permissions);
-            return (permissions & 8n) === 8n; // 8n is the bit for ADMINISTRATOR
+
+        // Fetch servers the bot is in
+        const botGuildsResponse = await axios.get('https://discord.com/api/users/@me/guilds', {
+            headers: { 'Authorization': `Bot ${botToken}` }
+        });
+
+        const userGuilds = userGuildsResponse.data;
+        const botGuildsSet = new Set(botGuildsResponse.data.map(g => g.id));
+
+        // Filter for servers where the user is an admin AND the bot is a member
+        const manageableGuilds = userGuilds.filter(guild => {
+            const userIsAdmin = (BigInt(guild.permissions) & 8n) === 8n; // 8n is ADMINISTRATOR permission
+            const botIsInGuild = botGuildsSet.has(guild.id);
+            return userIsAdmin && botIsInGuild;
         });
 
         res.json(manageableGuilds);
     } catch (error) {
-        console.error("Failed to fetch guilds from Discord API");
-        res.sendStatus(403);
+        console.error("Failed to fetch guilds:", error);
+        res.sendStatus(500);
     }
 });
 
-// --- BOT & WEBSITE API ROUTES ---
-
-// POST: The route for the frontend to submit the completed profile
+// --- OTHER API ROUTES ---
 app.post('/api/user/complete-profile', async (req, res) => {
     const { discordId, fullName, birthday, location } = req.body;
     if (!discordId || !fullName || !birthday || !location) {
@@ -181,7 +191,6 @@ app.post('/api/user/complete-profile', async (req, res) => {
     }
 });
 
-// GET: The route for the bot to fetch a server's settings.
 app.get('/api/settings/:guildId', async (req, res) => {
     try {
         const { guildId } = req.params;
@@ -196,8 +205,7 @@ app.get('/api/settings/:guildId', async (req, res) => {
     }
 });
 
-// POST: The route for the website dashboard to save a server's settings.
-app.post('/api/settings', verifyToken, async (req, res) => { // Added verifyToken middleware
+app.post('/api/settings', verifyToken, async (req, res) => {
     try {
         const { guildId, verificationChannelId, unverifiedRoleId, verifiedRoleId } = req.body;
         const settings = await ServerSettings.findOneAndUpdate(
