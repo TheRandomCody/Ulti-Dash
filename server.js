@@ -3,7 +3,8 @@
 // --- SETUP ---
 const express = require('express');
 const mongoose = require('mongoose');
-const axios = require('axios'); // For making requests to Discord's API
+const axios = require('axios');
+const cors = require('cors'); // Import the cors package
 require('dotenv').config();
 const app = express();
 
@@ -13,7 +14,15 @@ const clientId = process.env.CLIENT_ID;
 const clientSecret = process.env.CLIENT_SECRET;
 const redirectUri = 'https://api.ulti-bot.com/auth/discord/callback';
 
-// This is needed to correctly read the user's IP address when behind a proxy like Render.
+// --- MIDDLEWARE ---
+
+// Configure CORS to allow requests from your frontend domain
+const corsOptions = {
+    origin: 'https://www.ulti-bot.com',
+    optionsSuccessStatus: 200 // For legacy browser support
+};
+app.use(cors(corsOptions));
+
 app.set('trust proxy', 1);
 app.use(express.json());
 
@@ -23,17 +32,14 @@ mongoose.connect(mongoURI)
     .catch(error => console.error('Error connecting to MongoDB Atlas:', error));
 
 // --- DATABASE SCHEMAS & MODELS ---
-// Updated User Schema with new fields for profile completion and IP tracking.
 const userSchema = new mongoose.Schema({
     discordId: { type: String, required: true, unique: true },
     username: { type: String, required: true },
     avatar: { type: String },
-    // New fields for the registration form
     fullName: { type: String },
     birthday: { type: Date },
     location: { type: String },
-    isVerified: { type: Boolean, default: false }, // To track if they've completed the form
-    // IP Tracking
+    isVerified: { type: Boolean, default: false },
     ipHistory: [{
         ip: String,
         isVpn: Boolean,
@@ -52,20 +58,16 @@ const serverSettingsSchema = new mongoose.Schema({
 const ServerSettings = mongoose.model('ServerSettings', serverSettingsSchema);
 
 // --- DISCORD OAUTH2 ROUTES ---
-
-// Route to start the login process
 app.get('/auth/discord', (req, res) => {
     const authorizationUri = `https://discord.com/api/oauth2/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=identify%20guilds`;
     res.redirect(authorizationUri);
 });
 
-// Updated callback route with IP tracking and new user flow
 app.get('/auth/discord/callback', async (req, res) => {
     const code = req.query.code;
     if (!code) return res.status(400).send('No code provided.');
 
     try {
-        // --- Step 1: Get Discord Tokens ---
         const tokenResponse = await axios.post('https://discord.com/api/oauth2/token', new URLSearchParams({
             client_id: clientId,
             client_secret: clientSecret,
@@ -75,47 +77,38 @@ app.get('/auth/discord/callback', async (req, res) => {
         }), { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } });
         const accessToken = tokenResponse.data.access_token;
 
-        // --- Step 2: Get User Info from Discord ---
         const userResponse = await axios.get('https://discord.com/api/users/@me', {
             headers: { 'Authorization': `Bearer ${accessToken}` }
         });
         const discordUser = userResponse.data;
 
-        // --- Step 3: Track IP and Check for VPN ---
         const userIp = req.ip;
         let isVpn = false;
         try {
             const ipApiResponse = await axios.get(`http://ip-api.com/json/${userIp}?fields=proxy`);
-            if (ipApiResponse.data.proxy) {
-                isVpn = true;
-            }
+            if (ipApiResponse.data.proxy) isVpn = true;
         } catch (ipError) {
             console.error("IP-API check failed:", ipError.message);
         }
         const ipLog = { ip: userIp, isVpn: isVpn };
 
-        // --- Step 4: Check if user exists in our database ---
         let user = await User.findOne({ discordId: discordUser.id });
 
         if (user) {
-            // If user exists, update their IP history and redirect to dashboard
             user.ipHistory.push(ipLog);
             await user.save();
             console.log(`Existing user logged in: ${user.username}`);
-            // In a real app, you'd create a session token and send it here
-            res.redirect('https://www.ulti-bot.com/dashboard');
+            res.redirect('https://www.ulti-bot.com/dashboard.html');
         } else {
-            // If user is new, create a basic, unverified profile
             user = new User({
                 discordId: discordUser.id,
                 username: discordUser.username,
                 avatar: discordUser.avatar,
                 ipHistory: [ipLog],
-                isVerified: false // They haven't filled out the form yet
+                isVerified: false
             });
             await user.save();
             console.log(`New user created: ${user.username}`);
-            // **UPDATED:** Redirect them to the registration page with their Discord ID in the URL
             res.redirect(`https://www.ulti-bot.com/complete-profile.html?discordId=${discordUser.id}`);
         }
 
@@ -127,10 +120,7 @@ app.get('/auth/discord/callback', async (req, res) => {
 
 
 // --- API ROUTES ---
-
-// NEW Route for the frontend to submit the completed profile
 app.post('/api/user/complete-profile', async (req, res) => {
-    // In a real app, you'd verify the user's session/token here first
     const { discordId, fullName, birthday, location } = req.body;
     if (!discordId || !fullName || !birthday || !location) {
         return res.status(400).json({ error: 'Missing required profile fields.' });
@@ -143,9 +133,9 @@ app.post('/api/user/complete-profile', async (req, res) => {
                 fullName: fullName,
                 birthday: new Date(birthday),
                 location: location,
-                isVerified: true // Mark them as verified
+                isVerified: true
             },
-            { new: true } // Return the updated document
+            { new: true }
         );
 
         if (!user) {
@@ -161,8 +151,6 @@ app.post('/api/user/complete-profile', async (req, res) => {
     }
 });
 
-
-// (Your existing API routes for the bot go here)
 app.get('/api/settings/:guildId', async (req, res) => { /* ... */ });
 app.post('/api/settings', async (req, res) => { /* ... */ });
 
