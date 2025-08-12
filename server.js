@@ -12,7 +12,7 @@ const port = process.env.PORT || 3000;
 const mongoURI = process.env.MONGO_URI;
 const clientId = process.env.CLIENT_ID;
 const clientSecret = process.env.CLIENT_SECRET;
-const botToken = process.env.BOT_TOKEN; // New: Get the bot token for API calls
+const botToken = process.env.BOT_TOKEN;
 const redirectUri = 'https://api.ulti-bot.com/auth/discord/callback';
 
 // --- MIDDLEWARE ---
@@ -142,7 +142,7 @@ app.get('/api/auth/user', verifyToken, async (req, res) => {
     }
 });
 
-// GET: Fetch user's servers where they are an admin AND the bot is also present
+// GET: Fetch ALL of the user's servers and enrich them with bot and permission data
 app.get('/api/auth/guilds', verifyToken, async (req, res) => {
     try {
         // Fetch servers the user is in
@@ -158,14 +158,19 @@ app.get('/api/auth/guilds', verifyToken, async (req, res) => {
         const userGuilds = userGuildsResponse.data;
         const botGuildsSet = new Set(botGuildsResponse.data.map(g => g.id));
 
-        // Filter for servers where the user is an admin AND the bot is a member
-        const manageableGuilds = userGuilds.filter(guild => {
-            const userIsAdmin = (BigInt(guild.permissions) & 8n) === 8n; // 8n is ADMINISTRATOR permission
-            const botIsInGuild = botGuildsSet.has(guild.id);
-            return userIsAdmin && botIsInGuild;
+        // Enrich each guild with more information
+        const enrichedGuilds = userGuilds.map(guild => {
+            const permissions = BigInt(guild.permissions);
+            const canManage = (permissions & 8n) === 8n || (permissions & 32n) === 32n; // 8n is ADMINISTRATOR, 32n is MANAGE_GUILD
+            
+            return {
+                ...guild,
+                botInGuild: botGuildsSet.has(guild.id),
+                canManage: canManage,
+            };
         });
 
-        res.json(manageableGuilds);
+        res.json(enrichedGuilds);
     } catch (error) {
         console.error("Failed to fetch guilds:", error);
         res.sendStatus(500);
@@ -217,10 +222,4 @@ app.post('/api/settings', verifyToken, async (req, res) => {
     } catch (error) {
         res.status(500).json({ error: 'Server error while saving settings.' });
     }
-});
-
-
-// --- START THE SERVER ---
-app.listen(port, () => {
-    console.log(`Website server listening on port ${port}`);
 });
