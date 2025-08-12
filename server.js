@@ -142,7 +142,7 @@ app.get('/api/auth/user', verifyToken, async (req, res) => {
     }
 });
 
-// GET: Fetch ALL of the user's servers and enrich them with bot and permission data
+// GET: Fetch user's servers where they are an admin AND the bot is also present
 app.get('/api/auth/guilds', verifyToken, async (req, res) => {
     try {
         // Fetch servers the user is in
@@ -222,4 +222,11 @@ app.post('/api/settings', verifyToken, async (req, res) => {
     } catch (error) {
         res.status(500).json({ error: 'Server error while saving settings.' });
     }
+});
+
+
+// --- START THE SERVER ---
+// **FIX:** Moved this to the very end of the file.
+app.listen(port, () => {
+    console.log(`Website server listening on port ${port}`);
 });
