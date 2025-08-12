@@ -46,6 +46,15 @@ const userSchema = new mongoose.Schema({
 });
 const User = mongoose.model('User', userSchema);
 
+const serverSettingsSchema = new mongoose.Schema({
+    guildId: { type: String, required: true, unique: true },
+    verificationChannelId: { type: String, required: true },
+    unverifiedRoleId: { type: String, required: true },
+    verifiedRoleId: { type: String, required: true }
+});
+const ServerSettings = mongoose.model('ServerSettings', serverSettingsSchema);
+
+
 // --- DISCORD OAUTH2 ROUTES ---
 app.get('/auth/discord', (req, res) => {
     const authorizationUri = `https://discord.com/api/oauth2/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=identify%20guilds`;
@@ -108,17 +117,13 @@ app.get('/auth/discord/callback', async (req, res) => {
     }
 });
 
-// --- NEW AUTHENTICATED API ROUTES ---
+// --- AUTHENTICATED API ROUTES ---
 
 // Middleware to verify the access token for protected routes
 const verifyToken = (req, res, next) => {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1]; // Bearer <TOKEN>
-
-    if (token == null) return res.sendStatus(401); // if there isn't any token
-
-    // We will just pass the token to the next route. 
-    // The actual verification happens by using the token to talk to Discord's API.
+    if (token == null) return res.sendStatus(401);
     req.token = token;
     next();
 };
@@ -132,7 +137,7 @@ app.get('/api/auth/user', verifyToken, async (req, res) => {
         res.json(userResponse.data);
     } catch (error) {
         console.error("Failed to fetch user from Discord API");
-        res.sendStatus(403); // Token is likely invalid or expired
+        res.sendStatus(403);
     }
 });
 
@@ -143,7 +148,6 @@ app.get('/api/auth/guilds', verifyToken, async (req, res) => {
             headers: { 'Authorization': `Bearer ${req.token}` }
         });
         
-        // Filter to only show servers where the user can manage the server
         const manageableGuilds = guildsResponse.data.filter(guild => {
             const permissions = BigInt(guild.permissions);
             return (permissions & 8n) === 8n; // 8n is the bit for ADMINISTRATOR
@@ -156,8 +160,57 @@ app.get('/api/auth/guilds', verifyToken, async (req, res) => {
     }
 });
 
-// --- Other API routes (no changes needed) ---
-// ...
+// --- BOT & WEBSITE API ROUTES ---
+
+// POST: The route for the frontend to submit the completed profile
+app.post('/api/user/complete-profile', async (req, res) => {
+    const { discordId, fullName, birthday, location } = req.body;
+    if (!discordId || !fullName || !birthday || !location) {
+        return res.status(400).json({ error: 'Missing required profile fields.' });
+    }
+    try {
+        const user = await User.findOneAndUpdate(
+            { discordId: discordId },
+            { fullName, birthday: new Date(birthday), location, isVerified: true },
+            { new: true }
+        );
+        if (!user) return res.status(404).json({ error: 'User not found to update.' });
+        res.status(200).json({ message: 'Profile completed successfully!', user: user });
+    } catch (error) {
+        res.status(500).json({ error: 'Server error while completing profile.' });
+    }
+});
+
+// GET: The route for the bot to fetch a server's settings.
+app.get('/api/settings/:guildId', async (req, res) => {
+    try {
+        const { guildId } = req.params;
+        const settings = await ServerSettings.findOne({ guildId: guildId });
+        if (settings) {
+            res.status(200).json(settings);
+        } else {
+            res.status(404).json({ error: 'Settings not found for this server.' });
+        }
+    } catch (error) {
+        res.status(500).json({ error: 'Server error while fetching settings.' });
+    }
+});
+
+// POST: The route for the website dashboard to save a server's settings.
+app.post('/api/settings', verifyToken, async (req, res) => { // Added verifyToken middleware
+    try {
+        const { guildId, verificationChannelId, unverifiedRoleId, verifiedRoleId } = req.body;
+        const settings = await ServerSettings.findOneAndUpdate(
+            { guildId: guildId },
+            { verificationChannelId, unverifiedRoleId, verifiedRoleId },
+            { new: true, upsert: true }
+        );
+        res.status(200).json(settings);
+    } catch (error) {
+        res.status(500).json({ error: 'Server error while saving settings.' });
+    }
+});
+
 
 // --- START THE SERVER ---
 app.listen(port, () => {
