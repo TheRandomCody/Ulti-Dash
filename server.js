@@ -115,8 +115,8 @@ app.get('/auth/discord/callback', async (req, res) => {
             });
             await user.save();
             console.log(`New user created: ${user.username}`);
-            // Redirect them to the registration page to complete their profile
-            res.redirect('https://www.ulti-bot.com/complete-profile');
+            // **UPDATED:** Redirect them to the registration page with their Discord ID in the URL
+            res.redirect(`https://www.ulti-bot.com/complete-profile.html?discordId=${discordUser.id}`);
         }
 
     } catch (error) {
