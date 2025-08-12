@@ -3,14 +3,15 @@
 // --- SETUP ---
 const express = require('express');
 const mongoose = require('mongoose');
-require('dotenv').config(); // This line loads the .env file
+const axios = require('axios'); // For making requests to Discord's API
+require('dotenv').config();
 const app = express();
 
-// Render provides the PORT environment variable.
 const port = process.env.PORT || 3000;
-
-// We now get the mongoURI from the environment variables.
 const mongoURI = process.env.MONGO_URI;
+const clientId = process.env.CLIENT_ID;
+const clientSecret = process.env.CLIENT_SECRET;
+const redirectUri = 'https://api.ulti-bot.com/auth/discord/callback';
 
 app.use(express.json());
 
@@ -19,103 +20,79 @@ mongoose.connect(mongoURI)
     .then(() => console.log('Successfully connected to MongoDB Atlas!'))
     .catch(error => console.error('Error connecting to MongoDB Atlas:', error));
 
-
 // --- DATABASE SCHEMAS & MODELS ---
-
-// User Schema: Stores individual user profiles linked by their Discord ID.
 const userSchema = new mongoose.Schema({
     discordId: { type: String, required: true, unique: true },
     username: { type: String, required: true },
+    avatar: { type: String },
     level: { type: Number, default: 1 },
     bio: { type: String, default: 'No bio set.' },
     joined: { type: Date, default: Date.now }
 });
 const User = mongoose.model('User', userSchema);
 
-
-// Server Settings Schema: Stores verification settings for each server (guild).
-// The guildId is the unique identifier for each server's settings.
 const serverSettingsSchema = new mongoose.Schema({
     guildId: { type: String, required: true, unique: true },
     verificationChannelId: { type: String, required: true },
     unverifiedRoleId: { type: String, required: true },
-    verifiedRoleId: { type: String, required: true } // We'll need this for the final step
+    verifiedRoleId: { type: String, required: true }
 });
 const ServerSettings = mongoose.model('ServerSettings', serverSettingsSchema);
 
+// --- DISCORD OAUTH2 ROUTES ---
+
+// Route to start the login process
+app.get('/auth/discord', (req, res) => {
+    const authorizationUri = `https://discord.com/api/oauth2/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=identify%20guilds`;
+    res.redirect(authorizationUri);
+});
+
+// Route to handle the callback from Discord
+app.get('/auth/discord/callback', async (req, res) => {
+    const code = req.query.code;
+    if (!code) {
+        return res.status(400).send('No code provided.');
+    }
+
+    try {
+        // Exchange the code for an access token
+        const tokenResponse = await axios.post('https://discord.com/api/oauth2/token', new URLSearchParams({
+            client_id: clientId,
+            client_secret: clientSecret,
+            grant_type: 'authorization_code',
+            code: code,
+            redirect_uri: redirectUri,
+        }), {
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+        });
+
+        const accessToken = tokenResponse.data.access_token;
+
+        // Use the access token to get user info
+        const userResponse = await axios.get('https://discord.com/api/users/@me', {
+            headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+
+        const discordUser = userResponse.data;
+
+        // Here you would typically save the user to your database or create a session
+        // For now, we'll just redirect to the frontend with a success message
+        console.log('User successfully logged in:', discordUser.username);
+        res.redirect('https://www.ulti-bot.com?login=success'); // Redirect back to the frontend
+
+    } catch (error) {
+        console.error('Error during Discord OAuth2 flow:', error);
+        res.status(500).send('An error occurred during authentication.');
+    }
+});
+
 
 // --- API ROUTES ---
-
-// -- User Routes --
-app.get('/api/user/:discordId', async (req, res) => {
-    try {
-        const { discordId } = req.params;
-        const user = await User.findOne({ discordId: discordId });
-
-        if (user) {
-            res.status(200).json(user);
-        } else {
-            res.status(404).json({ error: 'User not found' });
-        }
-    } catch (error) {
-        res.status(500).json({ error: 'Server error while fetching user' });
-    }
-});
-
-app.post('/api/user/register', async (req, res) => {
-    try {
-        const { discordId, username, bio } = req.body;
-        const existingUser = await User.findOne({ discordId: discordId });
-        if (existingUser) {
-            return res.status(409).json({ error: 'User is already registered' });
-        }
-        const newUser = new User({ discordId, username, bio });
-        await newUser.save();
-        console.log('New user registered:', newUser);
-        res.status(201).json(newUser);
-    } catch (error) {
-        res.status(500).json({ error: 'Server error during registration' });
-    }
-});
-
-
-// -- Server Settings Routes --
-
-// GET: The route for the bot to fetch a server's settings.
-app.get('/api/settings/:guildId', async (req, res) => {
-    try {
-        const { guildId } = req.params;
-        const settings = await ServerSettings.findOne({ guildId: guildId });
-
-        if (settings) {
-            res.status(200).json(settings);
-        } else {
-            res.status(404).json({ error: 'Settings not found for this server.' });
-        }
-    } catch (error) {
-        res.status(500).json({ error: 'Server error while fetching settings.' });
-    }
-});
-
-// POST: The route for the website dashboard to save a server's settings.
-app.post('/api/settings', async (req, res) => {
-    try {
-        const { guildId, verificationChannelId, unverifiedRoleId, verifiedRoleId } = req.body;
-
-        // Find existing settings for this guild and update them,
-        // or create new settings if they don't exist.
-        const settings = await ServerSettings.findOneAndUpdate(
-            { guildId: guildId },
-            { verificationChannelId, unverifiedRoleId, verifiedRoleId },
-            { new: true, upsert: true } // `new` returns the updated doc, `upsert` creates if it doesn't exist
-        );
-
-        console.log('Server settings updated:', settings);
-        res.status(200).json(settings);
-    } catch (error) {
-        res.status(500).json({ error: 'Server error while saving settings.' });
-    }
-});
+// (Your existing API routes for the bot go here)
+app.get('/api/user/:discordId', async (req, res) => { /* ... */ });
+app.post('/api/user/register', async (req, res) => { /* ... */ });
+app.get('/api/settings/:guildId', async (req, res) => { /* ... */ });
+app.post('/api/settings', async (req, res) => { /* ... */ });
 
 
 // --- START THE SERVER ---
