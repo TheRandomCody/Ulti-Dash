@@ -170,6 +170,13 @@ app.get('/api/auth/guilds', verifyToken, async (req, res) => {
             };
         });
 
+        // Sort the guilds into categories
+        enrichedGuilds.sort((a, b) => {
+            const scoreA = (a.botInGuild && a.canManage) ? 3 : (!a.botInGuild && a.canManage) ? 2 : 1;
+            const scoreB = (b.botInGuild && b.canManage) ? 3 : (!b.botInGuild && b.canManage) ? 2 : 1;
+            return scoreB - scoreA;
+        });
+
         res.json(enrichedGuilds);
     } catch (error) {
         console.error("Failed to fetch guilds:", error);
