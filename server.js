@@ -145,42 +145,48 @@ app.get('/api/auth/user', verifyToken, async (req, res) => {
 // GET: Fetch user's servers where they are an admin AND the bot is also present
 app.get('/api/auth/guilds', verifyToken, async (req, res) => {
     try {
-        // Fetch servers the user is in
         const userGuildsResponse = await axios.get('https://discord.com/api/users/@me/guilds', {
             headers: { 'Authorization': `Bearer ${req.token}` }
         });
-
-        // Fetch servers the bot is in
         const botGuildsResponse = await axios.get('https://discord.com/api/users/@me/guilds', {
             headers: { 'Authorization': `Bot ${botToken}` }
         });
-
         const userGuilds = userGuildsResponse.data;
         const botGuildsSet = new Set(botGuildsResponse.data.map(g => g.id));
-
-        // Enrich each guild with more information
         const enrichedGuilds = userGuilds.map(guild => {
             const permissions = BigInt(guild.permissions);
-            const canManage = (permissions & 8n) === 8n || (permissions & 32n) === 32n; // 8n is ADMINISTRATOR, 32n is MANAGE_GUILD
-            
-            return {
-                ...guild,
-                botInGuild: botGuildsSet.has(guild.id),
-                canManage: canManage,
-            };
+            const canManage = (permissions & 8n) === 8n || (permissions & 32n) === 32n;
+            return { ...guild, botInGuild: botGuildsSet.has(guild.id), canManage };
         });
-
-        // Sort the guilds into categories
         enrichedGuilds.sort((a, b) => {
             const scoreA = (a.botInGuild && a.canManage) ? 3 : (!a.botInGuild && a.canManage) ? 2 : 1;
             const scoreB = (b.botInGuild && b.canManage) ? 3 : (!b.botInGuild && b.canManage) ? 2 : 1;
             return scoreB - scoreA;
         });
-
         res.json(enrichedGuilds);
     } catch (error) {
         console.error("Failed to fetch guilds:", error);
         res.sendStatus(500);
+    }
+});
+
+// GET: The route for fetching details for a specific server dashboard
+app.get('/api/guild/:guildId/details', verifyToken, async (req, res) => {
+    const { guildId } = req.params;
+    try {
+        const authHeaders = { 'Authorization': `Bot ${botToken}` };
+        const guildResponse = await axios.get(`https://discord.com/api/guilds/${guildId}`, { headers: authHeaders });
+        const channelsResponse = await axios.get(`https://discord.com/api/guilds/${guildId}/channels`, { headers: authHeaders });
+        const textChannels = channelsResponse.data.filter(c => c.type === 0);
+        const rolesResponse = await axios.get(`https://discord.com/api/guilds/${guildId}/roles`, { headers: authHeaders });
+        res.json({
+            guild: guildResponse.data,
+            channels: textChannels,
+            roles: rolesResponse.data
+        });
+    } catch (error) {
+        console.error(`Failed to fetch details for guild ${guildId}:`, error);
+        res.status(500).json({ error: 'Failed to fetch server details.' });
     }
 });
 
@@ -233,7 +239,6 @@ app.post('/api/settings', verifyToken, async (req, res) => {
 
 
 // --- START THE SERVER ---
-// **FIX:** Moved this to the very end of the file.
 app.listen(port, () => {
     console.log(`Website server listening on port ${port}`);
 });
