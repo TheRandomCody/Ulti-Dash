@@ -5,24 +5,19 @@ const router = express.Router();
 const Server = require('../models/Server');
 
 const botToken = process.env.BOT_TOKEN;
+const clientId = process.env.CLIENT_ID; // Get the Client ID from environment variables
 
-// UPDATED: Added logging to the token verification middleware
 const verifyToken = (req, res, next) => {
     const authHeader = req.headers['authorization'];
-    console.log('Received headers:', req.headers); // Log all headers
-
     if (authHeader) {
         const token = authHeader.split(' ')[1];
         if (token) {
-            console.log('Token received!');
             req.token = token;
             next();
         } else {
-            console.log('Authorization header is malformed.');
             return res.sendStatus(401);
         }
     } else {
-        console.log('Authorization header is missing.');
         return res.sendStatus(401);
     }
 };
@@ -32,7 +27,12 @@ router.get('/auth/user', verifyToken, async (req, res) => {
         const userResponse = await axios.get('https://discord.com/api/users/@me', {
             headers: { 'Authorization': `Bearer ${req.token}` }
         });
-        res.json(userResponse.data);
+        // Combine the user's Discord data with your app's Client ID
+        const responseData = {
+            ...userResponse.data,
+            clientId: clientId 
+        };
+        res.json(responseData);
     } catch (error) {
         console.error("Failed to fetch user from Discord API:", error.message);
         res.sendStatus(403);
