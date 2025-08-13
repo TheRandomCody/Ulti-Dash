@@ -14,7 +14,12 @@ const port = process.env.PORT || 3000;
 const baseMongoURI = process.env.MONGO_URI;
 const dbName = 'ulti-bot-db';
 const uriParts = baseMongoURI.split('?');
-const mongoURI = `${uriParts[0]}/${dbName}?${uriParts[1] || 'retryWrites=true&w=majority'}`;
+let baseUri = uriParts[0];
+// Remove trailing slash if it exists to prevent an invalid namespace
+if (baseUri.endsWith('/')) {
+    baseUri = baseUri.slice(0, -1);
+}
+const mongoURI = `${baseUri}/${dbName}?${uriParts[1] || 'retryWrites=true&w=majority'}`;
 
 const clientId = process.env.CLIENT_ID;
 const clientSecret = process.env.CLIENT_SECRET;
