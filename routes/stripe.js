@@ -28,7 +28,7 @@ router.post('/create-verification-session', verifyToken, async (req, res) => {
             return_url: 'https://www.ulti-bot.com/dashboard.html',
         });
 
-        // FIXED: Send the full URL provided by Stripe, not the client_secret
+        // FIXED: Send the full URL provided by Stripe
         res.status(200).json({
             url: verificationSession.url 
         });
