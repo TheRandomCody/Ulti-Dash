@@ -24,6 +24,10 @@ const corsOptions = {
 };
 app.use(cors(corsOptions));
 app.set('trust proxy', 1);
+
+// Stripe webhook requires the raw body, so we use this before express.json()
+app.use('/stripe/webhook', express.raw({type: 'application/json'}));
+
 app.use(express.json());
 
 // --- DATABASE CONNECTION ---
@@ -39,7 +43,8 @@ const staffRoutes = require('./routes/staff');
 const moderationRoutes = require('./routes/moderation');
 const loggingRoutes = require('./routes/logging');
 const autoRoleRoutes = require('./routes/autoRole');
-const profileRoutes = require('./routes/profile'); // New
+const profileRoutes = require('./routes/profile');
+const stripeRoutes = require('./routes/stripe'); // New
 
 app.use('/auth', authRoutes);
 app.use('/api', guildRoutes);
@@ -48,7 +53,8 @@ app.use('/api/settings', staffRoutes);
 app.use('/api/settings', moderationRoutes);
 app.use('/api/settings', loggingRoutes);
 app.use('/api/settings', autoRoleRoutes);
-app.use('/api/profile', profileRoutes); // New
+app.use('/api/profile', profileRoutes);
+app.use('/stripe', stripeRoutes); // New
 
 // --- START THE SERVER ---
 app.listen(port, () => {
