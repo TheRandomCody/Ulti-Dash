@@ -34,11 +34,19 @@ mongoose.connect(mongoURI)
 // --- IMPORT & USE ROUTES ---
 const authRoutes = require('./routes/auth');
 const guildRoutes = require('./routes/guilds');
-const settingsRoutes = require('./routes/settings');
+const verificationRoutes = require('./routes/verification');
+const staffRoutes = require('./routes/staff');
+const moderationRoutes = require('./routes/moderation');
+const loggingRoutes = require('./routes/logging');
+const autoRoleRoutes = require('./routes/autoRole');
 
-app.use('/auth', authRoutes); // All auth routes will be prefixed with /auth
-app.use('/api', guildRoutes); // All guild routes will be prefixed with /api
-app.use('/api/settings', settingsRoutes); // All settings routes will be prefixed with /api/settings
+app.use('/auth', authRoutes);
+app.use('/api', guildRoutes);
+app.use('/api/settings', verificationRoutes);
+app.use('/api/settings', staffRoutes);
+app.use('/api/settings', moderationRoutes);
+app.use('/api/settings', loggingRoutes);
+app.use('/api/settings', autoRoleRoutes);
 
 // --- START THE SERVER ---
 app.listen(port, () => {
