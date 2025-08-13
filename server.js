@@ -9,13 +9,10 @@ require('dotenv').config();
 const app = express();
 
 const port = process.env.PORT || 3000;
-// FIXED: Correctly construct the MongoDB URI
-// The URI from Atlas already contains query parameters. We need to insert the DB name before them.
 const baseMongoURI = process.env.MONGO_URI;
 const dbName = 'ulti-bot-db';
 const uriParts = baseMongoURI.split('?');
 let baseUri = uriParts[0];
-// Remove trailing slash if it exists to prevent an invalid namespace
 if (baseUri.endsWith('/')) {
     baseUri = baseUri.slice(0, -1);
 }
@@ -64,13 +61,11 @@ const IPLog = mongoose.model('IPLog', ipLogSchema);
 const staffTeamSchema = new mongoose.Schema({
     teamName: String,
     roles: [String],
-    permissions: String
+    permissions: String // e.g., 'full', 'auth', 'none'
 });
+
 const serverSchema = new mongoose.Schema({
     guildId: { type: String, required: true, unique: true },
-    serverName: String,
-    ownerId: String,
-    memberCount: Number,
     verification: {
         verificationChannelId: String,
         unverifiedRoleId: String,
@@ -84,25 +79,6 @@ const serverSchema = new mongoose.Schema({
     }
 });
 const Server = mongoose.model('Server', serverSchema);
-
-const punishmentLogSchema = new mongoose.Schema({
-    guildId: { type: String, required: true, index: true },
-    moderatorId: { type: String, required: true },
-    targetId: { type: String, required: true },
-    action: String,
-    reason: String,
-    timestamp: { type: Date, default: Date.now }
-});
-const PunishmentLog = mongoose.model('PunishmentLog', punishmentLogSchema);
-
-const blacklistSchema = new mongoose.Schema({
-    userId: { type: String, required: true, unique: true },
-    reason: String,
-    moderatorId: String,
-    timestamp: { type: Date, default: Date.now }
-});
-const Blacklist = mongoose.model('Blacklist', blacklistSchema);
-
 
 // --- DISCORD OAUTH2 ROUTES ---
 app.get('/auth/discord', (req, res) => {
@@ -227,8 +203,12 @@ app.post('/api/settings/verification', verifyToken, async (req, res) => {
         const { guildId, verificationChannelId, unverifiedRoleId, verifiedRoleId } = req.body;
         await Server.findOneAndUpdate(
             { guildId: guildId },
-            { 'verification.verificationChannelId': verificationChannelId, 'verification.unverifiedRoleId': unverifiedRoleId, 'verification.verifiedRoleId': verifiedRoleId },
-            { upsert: true, setDefaultsOnInsert: true }
+            { $set: { 
+                'verification.verificationChannelId': verificationChannelId, 
+                'verification.unverifiedRoleId': unverifiedRoleId, 
+                'verification.verifiedRoleId': verifiedRoleId 
+            }},
+            { upsert: true, new: true, setDefaultsOnInsert: true }
         );
         res.status(200).json({ message: 'Verification settings saved!' });
     } catch (error) {
@@ -241,16 +221,17 @@ app.post('/api/settings/staff', verifyToken, async (req, res) => {
         const { guildId, isEnabled, ownerRoleId, emergencyOverrideEnabled, teams } = req.body;
         await Server.findOneAndUpdate(
             { guildId: guildId },
-            {
+            { $set: {
                 'staff.isEnabled': isEnabled,
                 'staff.ownerRoleId': ownerRoleId,
                 'staff.emergencyOverrideEnabled': emergencyOverrideEnabled,
                 'staff.teams': teams
-            },
-            { upsert: true, setDefaultsOnInsert: true }
+            }},
+            { upsert: true, new: true, setDefaultsOnInsert: true }
         );
         res.status(200).json({ message: 'Staff settings saved!' });
     } catch (error) {
+        console.error('Error saving staff settings:', error);
         res.status(500).json({ error: 'Server error while saving staff settings.' });
     }
 });
