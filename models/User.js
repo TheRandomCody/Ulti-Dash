@@ -12,4 +12,5 @@ const userSchema = new mongoose.Schema({
     joined: { type: Date, default: Date.now }
 });
 
-module.exports = mongoose.model('User', userSchema);
+// This line checks if the model is already compiled and uses the existing one if it is.
+module.exports = mongoose.models.User || mongoose.model('User', userSchema);

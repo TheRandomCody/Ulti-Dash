@@ -18,7 +18,7 @@ const staffTeamSchema = new mongoose.Schema({
 const warningTierSchema = new mongoose.Schema({
     warnCount: Number,
     action: { type: String, enum: ['mute', 'kick', 'ban'] },
-    duration: Number, // in minutes
+    duration: Number,
     durationUnit: { type: String, enum: ['minutes', 'hours', 'days'] }
 });
 
@@ -52,7 +52,15 @@ const serverSchema = new mongoose.Schema({
         },
         mutedRoleId: String,
         modLogChannelId: String
+    },
+    logging: {
+        actionLogChannelId: String,
+        messageLogChannelId: String
+    },
+    autoRole: {
+        joinRoleId: String
     }
 });
 
-module.exports = mongoose.model('Server', serverSchema);
+// This line checks if the model is already compiled and uses the existing one if it is.
+module.exports = mongoose.models.Server || mongoose.model('Server', serverSchema);
