@@ -15,7 +15,6 @@ const verifyToken = (req, res, next) => {
 // This route creates the Stripe Identity session
 router.post('/create-verification-session', verifyToken, async (req, res) => {
     try {
-        // We can pass the user's Discord ID to Stripe as metadata
         const { discordId } = req.body;
         if (!discordId) {
             return res.status(400).json({ error: 'Discord ID is required.' });
@@ -29,8 +28,9 @@ router.post('/create-verification-session', verifyToken, async (req, res) => {
             return_url: 'https://www.ulti-bot.com/dashboard.html',
         });
 
+        // Send back the direct URL to the Stripe verification flow
         res.status(200).json({
-            clientSecret: verificationSession.client_secret,
+            url: verificationSession.url 
         });
     } catch (error) {
         console.error('Error creating Stripe session:', error);
@@ -51,14 +51,12 @@ router.post('/webhook', async (req, res) => {
         return res.status(400).send(`Webhook Error: ${err.message}`);
     }
 
-    // Handle the event
     if (event.type === 'identity.verification_session.verified') {
         const session = event.data.object;
         const discordId = session.metadata.discord_id;
         
         console.log(`Verification successful for Discord ID: ${discordId}`);
 
-        // Update the user's profile in the database
         await User.findOneAndUpdate(
             { discordId: discordId },
             { $set: { isStripeVerified: true } }
