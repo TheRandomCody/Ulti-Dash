@@ -13,18 +13,17 @@ const verifyToken = (req, res, next) => {
 
 router.post('/verification', verifyToken, async (req, res) => {
     try {
-        const { guildId, verificationChannelId, unverifiedRoleId, verifiedRoleId } = req.body;
+        const { guildId, settings } = req.body;
         await Server.findOneAndUpdate(
             { guildId: guildId },
             { $set: { 
-                'verification.verificationChannelId': verificationChannelId, 
-                'verification.unverifiedRoleId': unverifiedRoleId, 
-                'verification.verifiedRoleId': verifiedRoleId 
+                'verification': settings
             }},
             { upsert: true, new: true, setDefaultsOnInsert: true }
         );
         res.status(200).json({ message: 'Verification settings saved!' });
     } catch (error) {
+        console.error('Error saving verification settings:', error);
         res.status(500).json({ error: 'Server error while saving settings.' });
     }
 });
