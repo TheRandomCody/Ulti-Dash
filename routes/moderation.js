@@ -1,57 +1,40 @@
-// models/Server.js
-const mongoose = require('mongoose');
+// routes/moderation.js
+const express = require('express');
+const router = express.Router();
+const Server = require('../models/Server'); // Correctly import the model
 
-const staffTeamSchema = new mongoose.Schema({
-    teamId: { type: String, required: true },
-    teamName: String,
-    roles: [String],
-    permissions: {
-        ban: { type: String, enum: ['full', 'auth', 'none'], default: 'none' },
-        kick: { type: String, enum: ['full', 'auth', 'none'], default: 'none' },
-        mute: { type: String, enum: ['full', 'auth', 'none'], default: 'none' },
-        warn: { type: String, enum: ['full', 'auth', 'none'], default: 'none' },
-        blacklist: { type: String, enum: ['full', 'auth', 'none'], default: 'none' }
-    },
-    canAuthorize: [String]
-});
+const verifyToken = (req, res, next) => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+    if (token == null) return res.sendStatus(401);
+    req.token = token;
+    next();
+};
 
-const warningTierSchema = new mongoose.Schema({
-    warnCount: Number,
-    action: { type: String, enum: ['mute', 'kick', 'ban'] },
-    duration: Number, // in minutes
-});
+router.post('/moderation', verifyToken, async (req, res) => {
+    try {
+        const { guildId, settings } = req.body;
+        
+        // Convert comma-separated strings to arrays where necessary
+        if (settings.joinGate && settings.joinGate.bannedUsernames) {
+            settings.joinGate.bannedUsernames = settings.joinGate.bannedUsernames.split(',').map(s => s.trim()).filter(Boolean);
+        }
+        if (settings.contentFiltering && settings.contentFiltering.bannedWords) {
+            settings.contentFiltering.bannedWords = settings.contentFiltering.bannedWords.split(',').map(s => s.trim()).filter(Boolean);
+        }
 
-const serverSchema = new mongoose.Schema({
-    guildId: { type: String, required: true, unique: true },
-    verification: {
-        verificationChannelId: String,
-        unverifiedRoleId: String,
-        verifiedRoleId: String
-    },
-    staff: {
-        isEnabled: { type: Boolean, default: false },
-        ownerRoleId: String,
-        emergencyOverrideEnabled: { type: Boolean, default: false },
-        teams: [staffTeamSchema]
-    },
-    moderation: {
-        joinGate: {
-            noAvatarAction: { type: String, enum: ['none', 'kick', 'ban'], default: 'none' },
-            minAccountAgeDays: { type: Number, default: 0 },
-            bannedUsernames: [String]
-        },
-        contentFiltering: {
-            bannedWords: [String],
-            blockInvites: { type: Boolean, default: false },
-            blockMassMention: { type: Boolean, default: false },
-            blockCaps: { type: Boolean, default: false }
-        },
-        warningSystem: {
-            tiers: [warningTierSchema]
-        },
-        mutedRoleId: String,
-        modLogChannelId: String
+        await Server.findOneAndUpdate(
+            { guildId: guildId },
+            { $set: { 
+                'moderation': settings
+            }},
+            { upsert: true, new: true, setDefaultsOnInsert: true }
+        );
+        res.status(200).json({ message: 'Moderation settings saved!' });
+    } catch (error) {
+        console.error('Error saving moderation settings:', error);
+        res.status(500).json({ error: 'Server error while saving settings.' });
     }
 });
 
-module.exports = mongoose.model('Server', serverSchema);
+module.exports = router;
