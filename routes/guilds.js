@@ -2,16 +2,29 @@
 const express = require('express');
 const axios = require('axios');
 const router = express.Router();
-const Server = require('../models/Server'); // Import the Server model
+const Server = require('../models/Server');
 
 const botToken = process.env.BOT_TOKEN;
 
+// UPDATED: Added logging to the token verification middleware
 const verifyToken = (req, res, next) => {
     const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
-    if (token == null) return res.sendStatus(401);
-    req.token = token;
-    next();
+    console.log('Received headers:', req.headers); // Log all headers
+
+    if (authHeader) {
+        const token = authHeader.split(' ')[1];
+        if (token) {
+            console.log('Token received!');
+            req.token = token;
+            next();
+        } else {
+            console.log('Authorization header is malformed.');
+            return res.sendStatus(401);
+        }
+    } else {
+        console.log('Authorization header is missing.');
+        return res.sendStatus(401);
+    }
 };
 
 router.get('/auth/user', verifyToken, async (req, res) => {
@@ -21,6 +34,7 @@ router.get('/auth/user', verifyToken, async (req, res) => {
         });
         res.json(userResponse.data);
     } catch (error) {
+        console.error("Failed to fetch user from Discord API:", error.message);
         res.sendStatus(403);
     }
 });
@@ -47,6 +61,7 @@ router.get('/auth/guilds', verifyToken, async (req, res) => {
         });
         res.json(enrichedGuilds);
     } catch (error) {
+        console.error("Failed to fetch guilds from Discord API:", error.message);
         res.sendStatus(500);
     }
 });
@@ -73,6 +88,7 @@ router.get('/guild/:guildId/details', verifyToken, async (req, res) => {
             savedSettings: savedSettings 
         });
     } catch (error) {
+        console.error(`Failed to fetch details for guild ${guildId}:`, error.message);
         res.status(500).json({ error: 'Failed to fetch server details.' });
     }
 });
