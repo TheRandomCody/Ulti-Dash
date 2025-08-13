@@ -44,7 +44,8 @@ const moderationRoutes = require('./routes/moderation');
 const loggingRoutes = require('./routes/logging');
 const autoRoleRoutes = require('./routes/autoRole');
 const profileRoutes = require('./routes/profile');
-const stripeRoutes = require('./routes/stripe'); // New
+const stripeRoutes = require('./routes/stripe');
+const botRoutes = require('./routes/bot'); // Import the missing bot routes
 
 app.use('/auth', authRoutes);
 app.use('/api', guildRoutes);
@@ -54,7 +55,8 @@ app.use('/api/settings', moderationRoutes);
 app.use('/api/settings', loggingRoutes);
 app.use('/api/settings', autoRoleRoutes);
 app.use('/api/profile', profileRoutes);
-app.use('/stripe', stripeRoutes); // New
+app.use('/stripe', stripeRoutes);
+app.use('/api/bot', botRoutes); // Use the bot routes with the correct prefix
 
 // --- START THE SERVER ---
 app.listen(port, () => {
