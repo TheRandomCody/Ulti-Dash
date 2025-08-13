@@ -39,6 +39,7 @@ const staffRoutes = require('./routes/staff');
 const moderationRoutes = require('./routes/moderation');
 const loggingRoutes = require('./routes/logging');
 const autoRoleRoutes = require('./routes/autoRole');
+const profileRoutes = require('./routes/profile'); // New
 
 app.use('/auth', authRoutes);
 app.use('/api', guildRoutes);
@@ -47,6 +48,7 @@ app.use('/api/settings', staffRoutes);
 app.use('/api/settings', moderationRoutes);
 app.use('/api/settings', loggingRoutes);
 app.use('/api/settings', autoRoleRoutes);
+app.use('/api/profile', profileRoutes); // New
 
 // --- START THE SERVER ---
 app.listen(port, () => {
