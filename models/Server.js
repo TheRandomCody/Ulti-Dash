@@ -28,16 +28,16 @@ const serverSchema = new mongoose.Schema({
         verificationChannelId: String,
         unverifiedRoleId: String,
         verifiedRoleId: String,
-        // New fields for conditional actions
         verifiedUserAction: { type: String, enum: ['none', 'give_role'], default: 'none' },
         unverifiedUserAction: { type: String, enum: ['kick', 'ban', 'give_role'], default: 'give_role' },
-        // New fields for age gate
         ageGate: {
             isEnabled: { type: Boolean, default: false },
             minAge: { type: Number, default: 13 },
             maxAge: { type: Number, default: 99 },
             action: { type: String, enum: ['kick', 'ban'], default: 'kick' }
-        }
+        },
+        // New field for the verification embed message
+        verificationEmbedMessage: { type: String, default: 'Please verify your account to access the rest of the server.' }
     },
     staff: {
         isEnabled: { type: Boolean, default: false },
@@ -72,8 +72,4 @@ const serverSchema = new mongoose.Schema({
     }
 });
 
-module.exports = mongoose.models.Server || mongoose.model('Server', serverSchema);
-
-
-// This line checks if the model is already compiled and uses the existing one if it is.
 module.exports = mongoose.models.Server || mongoose.model('Server', serverSchema);
