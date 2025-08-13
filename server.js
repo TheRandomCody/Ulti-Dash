@@ -58,10 +58,19 @@ const ipLogSchema = new mongoose.Schema({
 });
 const IPLog = mongoose.model('IPLog', ipLogSchema);
 
+// UPDATED: More detailed staff team schema
 const staffTeamSchema = new mongoose.Schema({
+    teamId: { type: String, required: true }, // Unique ID for inter-team auth
     teamName: String,
     roles: [String],
-    permissions: String
+    permissions: {
+        ban: { type: String, enum: ['full', 'auth', 'none'], default: 'none' },
+        kick: { type: String, enum: ['full', 'auth', 'none'], default: 'none' },
+        mute: { type: String, enum: ['full', 'auth', 'none'], default: 'none' },
+        warn: { type: String, enum: ['full', 'auth', 'none'], default: 'none' },
+        blacklist: { type: String, enum: ['full', 'auth', 'none'], default: 'none' }
+    },
+    canAuthorize: [String] // Array of other team IDs this team can authorize
 });
 
 const serverSchema = new mongoose.Schema({
@@ -217,6 +226,7 @@ app.post('/api/settings/verification', verifyToken, async (req, res) => {
     }
 });
 
+// UPDATED: Staff settings route to handle the new detailed structure
 app.post('/api/settings/staff', verifyToken, async (req, res) => {
     try {
         const { guildId, isEnabled, ownerRoleId, emergencyOverrideEnabled, teams } = req.body;
@@ -226,7 +236,7 @@ app.post('/api/settings/staff', verifyToken, async (req, res) => {
                 'staff.isEnabled': isEnabled,
                 'staff.ownerRoleId': ownerRoleId,
                 'staff.emergencyOverrideEnabled': emergencyOverrideEnabled,
-                'staff.teams': teams
+                'staff.teams': teams // Teams data now includes the detailed permissions object
             }},
             { upsert: true, new: true, setDefaultsOnInsert: true }
         );
