@@ -9,7 +9,6 @@ require('dotenv').config();
 const app = express();
 
 const port = process.env.PORT || 3000;
-// UPDATED: Added a specific database name to the connection URI
 const mongoURI = `${process.env.MONGO_URI}/ulti-bot-db?retryWrites=true&w=majority`;
 const clientId = process.env.CLIENT_ID;
 const clientSecret = process.env.CLIENT_SECRET;
@@ -31,8 +30,6 @@ mongoose.connect(mongoURI)
     .catch(error => console.error('Error connecting to MongoDB Atlas:', error));
 
 // --- DATABASE SCHEMAS & MODELS ---
-
-// Collection: users
 const userSchema = new mongoose.Schema({
     discordId: { type: String, required: true, unique: true },
     username: { type: String, required: true },
@@ -45,7 +42,6 @@ const userSchema = new mongoose.Schema({
 });
 const User = mongoose.model('User', userSchema);
 
-// Collection: ip_logs
 const ipLogSchema = new mongoose.Schema({
     userId: { type: String, required: true, index: true },
     ip: String,
@@ -54,7 +50,6 @@ const ipLogSchema = new mongoose.Schema({
 });
 const IPLog = mongoose.model('IPLog', ipLogSchema);
 
-// Collection: servers (replaces serversettings)
 const staffTeamSchema = new mongoose.Schema({
     teamName: String,
     roles: [String],
@@ -79,18 +74,16 @@ const serverSchema = new mongoose.Schema({
 });
 const Server = mongoose.model('Server', serverSchema);
 
-// Collection: punishment_logs
 const punishmentLogSchema = new mongoose.Schema({
     guildId: { type: String, required: true, index: true },
     moderatorId: { type: String, required: true },
     targetId: { type: String, required: true },
-    action: String, // e.g., 'kick', 'ban', 'warn'
+    action: String,
     reason: String,
     timestamp: { type: Date, default: Date.now }
 });
 const PunishmentLog = mongoose.model('PunishmentLog', punishmentLogSchema);
 
-// Collection: blacklist
 const blacklistSchema = new mongoose.Schema({
     userId: { type: String, required: true, unique: true },
     reason: String,
@@ -101,9 +94,11 @@ const Blacklist = mongoose.model('Blacklist', blacklistSchema);
 
 
 // --- DISCORD OAUTH2 ROUTES ---
-app.get('/auth/discord', (req, res) => { /* ... */ });
+app.get('/auth/discord', (req, res) => {
+    const authorizationUri = `https://discord.com/api/oauth2/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=identify%20guilds`;
+    res.redirect(authorizationUri);
+});
 
-// UPDATED: This route now creates a separate IPLog document
 app.get('/auth/discord/callback', async (req, res) => {
     const code = req.query.code;
     if (!code) return res.status(400).send('No code provided.');
@@ -117,7 +112,6 @@ app.get('/auth/discord/callback', async (req, res) => {
         const userResponse = await axios.get('https://discord.com/api/users/@me', { headers: { 'Authorization': `Bearer ${accessToken}` } });
         const discordUser = userResponse.data;
 
-        // Create IP Log
         const userIp = req.ip;
         let isVpn = false;
         try {
@@ -145,11 +139,51 @@ app.get('/auth/discord/callback', async (req, res) => {
 });
 
 // --- AUTHENTICATED API ROUTES ---
-const verifyToken = (req, res, next) => { /* ... */ };
-app.get('/api/auth/user', verifyToken, async (req, res) => { /* ... */ });
-app.get('/api/auth/guilds', verifyToken, async (req, res) => { /* ... */ });
+const verifyToken = (req, res, next) => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+    if (token == null) return res.sendStatus(401);
+    req.token = token;
+    next();
+};
 
-// UPDATED: This route now fetches from the 'servers' collection
+app.get('/api/auth/user', verifyToken, async (req, res) => {
+    try {
+        const userResponse = await axios.get('https://discord.com/api/users/@me', {
+            headers: { 'Authorization': `Bearer ${req.token}` }
+        });
+        res.json(userResponse.data);
+    } catch (error) {
+        res.sendStatus(403);
+    }
+});
+
+app.get('/api/auth/guilds', verifyToken, async (req, res) => {
+    try {
+        const userGuildsResponse = await axios.get('https://discord.com/api/users/@me/guilds', {
+            headers: { 'Authorization': `Bearer ${req.token}` }
+        });
+        const botGuildsResponse = await axios.get('https://discord.com/api/users/@me/guilds', {
+            headers: { 'Authorization': `Bot ${botToken}` }
+        });
+        const userGuilds = userGuildsResponse.data;
+        const botGuildsSet = new Set(botGuildsResponse.data.map(g => g.id));
+        const enrichedGuilds = userGuilds.map(guild => {
+            const permissions = BigInt(guild.permissions);
+            const canManage = (permissions & 8n) === 8n || (permissions & 32n) === 32n;
+            return { ...guild, botInGuild: botGuildsSet.has(guild.id), canManage };
+        });
+        enrichedGuilds.sort((a, b) => {
+            const scoreA = (a.botInGuild && a.canManage) ? 3 : (!a.botInGuild && a.canManage) ? 2 : 1;
+            const scoreB = (b.botInGuild && b.canManage) ? 3 : (!b.botInGuild && b.canManage) ? 2 : 1;
+            return scoreB - scoreA;
+        });
+        res.json(enrichedGuilds);
+    } catch (error) {
+        res.sendStatus(500);
+    }
+});
+
 app.get('/api/guild/:guildId/details', verifyToken, async (req, res) => {
     const { guildId } = req.params;
     try {
@@ -157,7 +191,7 @@ app.get('/api/guild/:guildId/details', verifyToken, async (req, res) => {
         const guildPromise = axios.get(`https://discord.com/api/guilds/${guildId}`, { headers: authHeaders });
         const channelsPromise = axios.get(`https://discord.com/api/guilds/${guildId}/channels`, { headers: authHeaders });
         const rolesPromise = axios.get(`https://discord.com/api/guilds/${guildId}/roles`, { headers: authHeaders });
-        const settingsPromise = Server.findOne({ guildId: guildId }); // Use the new 'Server' model
+        const settingsPromise = Server.findOne({ guildId: guildId });
 
         const [guildResponse, channelsResponse, rolesResponse, savedSettings] = await Promise.all([
             guildPromise, channelsPromise, rolesPromise, settingsPromise
@@ -172,14 +206,11 @@ app.get('/api/guild/:guildId/details', verifyToken, async (req, res) => {
             savedSettings: savedSettings 
         });
     } catch (error) {
-        console.error(`Failed to fetch details for guild ${guildId}:`, error);
         res.status(500).json({ error: 'Failed to fetch server details.' });
     }
 });
 
 // --- SETTINGS SAVE ROUTES ---
-
-// UPDATED: This route now saves to the 'servers' collection
 app.post('/api/settings/verification', verifyToken, async (req, res) => {
     try {
         const { guildId, verificationChannelId, unverifiedRoleId, verifiedRoleId } = req.body;
@@ -194,7 +225,6 @@ app.post('/api/settings/verification', verifyToken, async (req, res) => {
     }
 });
 
-// UPDATED: This route now saves to the 'servers' collection
 app.post('/api/settings/staff', verifyToken, async (req, res) => {
     try {
         const { guildId, isEnabled, ownerRoleId, emergencyOverrideEnabled, teams } = req.body;
@@ -210,13 +240,28 @@ app.post('/api/settings/staff', verifyToken, async (req, res) => {
         );
         res.status(200).json({ message: 'Staff settings saved!' });
     } catch (error) {
-        console.error('Error saving staff settings:', error);
         res.status(500).json({ error: 'Server error while saving staff settings.' });
     }
 });
 
 // --- OTHER API ROUTES ---
-app.post('/api/user/complete-profile', async (req, res) => { /* ... */ });
+app.post('/api/user/complete-profile', async (req, res) => {
+    const { discordId, fullName, birthday, location } = req.body;
+    if (!discordId || !fullName || !birthday || !location) {
+        return res.status(400).json({ error: 'Missing required profile fields.' });
+    }
+    try {
+        const user = await User.findOneAndUpdate(
+            { discordId: discordId },
+            { fullName, birthday: new Date(birthday), location, isVerified: true },
+            { new: true }
+        );
+        if (!user) return res.status(404).json({ error: 'User not found to update.' });
+        res.status(200).json({ message: 'Profile completed successfully!', user: user });
+    } catch (error) {
+        res.status(500).json({ error: 'Server error while completing profile.' });
+    }
+});
 
 // --- START THE SERVER ---
 app.listen(port, () => {
