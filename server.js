@@ -9,7 +9,13 @@ require('dotenv').config();
 const app = express();
 
 const port = process.env.PORT || 3000;
-const mongoURI = `${process.env.MONGO_URI}/ulti-bot-db?retryWrites=true&w=majority`;
+// FIXED: Correctly construct the MongoDB URI
+// The URI from Atlas already contains query parameters. We need to insert the DB name before them.
+const baseMongoURI = process.env.MONGO_URI;
+const dbName = 'ulti-bot-db';
+const uriParts = baseMongoURI.split('?');
+const mongoURI = `${uriParts[0]}/${dbName}?${uriParts[1] || 'retryWrites=true&w=majority'}`;
+
 const clientId = process.env.CLIENT_ID;
 const clientSecret = process.env.CLIENT_SECRET;
 const botToken = process.env.BOT_TOKEN;
