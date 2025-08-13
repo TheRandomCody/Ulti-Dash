@@ -25,7 +25,7 @@ const redirectUri = 'https://api.ulti-bot.com/auth/discord/callback';
 
 // --- MIDDLEWARE ---
 const corsOptions = {
-    origin: ['https://www.ulti-bot.com', 'http://localhost:3000'],
+    origin: 'https://www.ulti-bot.com',
     optionsSuccessStatus: 200
 };
 app.use(cors(corsOptions));
@@ -63,6 +63,7 @@ const staffTeamSchema = new mongoose.Schema({
     roles: [String],
     permissions: String
 });
+
 const serverSchema = new mongoose.Schema({
     guildId: { type: String, required: true, unique: true },
     verification: {
@@ -74,24 +75,18 @@ const serverSchema = new mongoose.Schema({
         isEnabled: { type: Boolean, default: false },
         ownerRoleId: String,
         emergencyOverrideEnabled: { type: Boolean, default: false },
-        authLogChannelId: String,
-        authRequestStyle: { type: String, default: 'embed' }
+        teams: [staffTeamSchema]
     }
 });
 const Server = mongoose.model('Server', serverSchema);
 
-// --- DISCORD OAUTH2 & AUTH ROUTES ---
-const verifyToken = (req, res, next) => {
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
-    if (token == null) return res.sendStatus(401);
-    req.token = token;
-    next();
-};
+
+// --- DISCORD OAUTH2 ROUTES ---
 app.get('/auth/discord', (req, res) => {
     const authorizationUri = `https://discord.com/api/oauth2/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=identify%20guilds`;
     res.redirect(authorizationUri);
 });
+
 app.get('/auth/discord/callback', async (req, res) => {
     const code = req.query.code;
     if (!code) return res.status(400).send('No code provided.');
@@ -130,6 +125,16 @@ app.get('/auth/discord/callback', async (req, res) => {
         res.status(500).send('An error occurred during authentication.');
     }
 });
+
+// --- AUTHENTICATED API ROUTES ---
+const verifyToken = (req, res, next) => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+    if (token == null) return res.sendStatus(401);
+    req.token = token;
+    next();
+};
+
 app.get('/api/auth/user', verifyToken, async (req, res) => {
     try {
         const userResponse = await axios.get('https://discord.com/api/users/@me', {
@@ -140,6 +145,7 @@ app.get('/api/auth/user', verifyToken, async (req, res) => {
         res.sendStatus(403);
     }
 });
+
 app.get('/api/auth/guilds', verifyToken, async (req, res) => {
     try {
         const userGuildsResponse = await axios.get('https://discord.com/api/users/@me/guilds', {
@@ -165,6 +171,7 @@ app.get('/api/auth/guilds', verifyToken, async (req, res) => {
         res.sendStatus(500);
     }
 });
+
 app.get('/api/guild/:guildId/details', verifyToken, async (req, res) => {
     const { guildId } = req.params;
     try {
@@ -191,50 +198,6 @@ app.get('/api/guild/:guildId/details', verifyToken, async (req, res) => {
     }
 });
 
-// --- BOT-FACING PERMISSION CHECK ROUTE ---
-app.post('/api/guild/:guildId/check-permissions', async (req, res) => {
-    const { guildId } = req.params;
-    const { userId, userRoles } = req.body;
-
-    if (req.headers['authorization'] !== `Bot ${botToken}`) {
-        return res.status(401).json({ error: 'Unauthorized' });
-    }
-
-    try {
-        const settings = await Server.findOne({ guildId });
-        if (!settings || !settings.staff || !settings.staff.isEnabled) {
-            return res.json({ permission: 'use_default' });
-        }
-
-        if (userRoles.includes(settings.staff.ownerRoleId)) {
-            return res.json({ 
-                permission: 'full', 
-                authLogChannelId: settings.staff.authLogChannelId,
-                authRequestStyle: settings.staff.authRequestStyle 
-            });
-        }
-
-        let highestPermission = 'none';
-        for (const team of settings.staff.teams) {
-            const userIsInTeam = team.roles.some(roleId => userRoles.includes(roleId));
-            if (userIsInTeam) {
-                highestPermission = team.permissions;
-                break;
-            }
-        }
-        
-        res.json({ 
-            permission: highestPermission, 
-            authLogChannelId: settings.staff.authLogChannelId,
-            authRequestStyle: settings.staff.authRequestStyle 
-        });
-
-    } catch (error) {
-        console.error('Permission check error:', error);
-        res.status(500).json({ error: 'Error checking permissions.' });
-    }
-});
-
 // --- SETTINGS SAVE ROUTES ---
 app.post('/api/settings/verification', verifyToken, async (req, res) => {
     try {
@@ -253,17 +216,16 @@ app.post('/api/settings/verification', verifyToken, async (req, res) => {
         res.status(500).json({ error: 'Server error while saving settings.' });
     }
 });
+
 app.post('/api/settings/staff', verifyToken, async (req, res) => {
     try {
-        const { guildId, isEnabled, ownerRoleId, emergencyOverrideEnabled, authLogChannelId, authRequestStyle, teams } = req.body;
+        const { guildId, isEnabled, ownerRoleId, emergencyOverrideEnabled, teams } = req.body;
         await Server.findOneAndUpdate(
             { guildId: guildId },
             { $set: {
                 'staff.isEnabled': isEnabled,
                 'staff.ownerRoleId': ownerRoleId,
                 'staff.emergencyOverrideEnabled': emergencyOverrideEnabled,
-                'staff.authLogChannelId': authLogChannelId,
-                'staff.authRequestStyle': authRequestStyle,
                 'staff.teams': teams
             }},
             { upsert: true, new: true, setDefaultsOnInsert: true }
