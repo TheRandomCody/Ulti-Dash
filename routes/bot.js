@@ -24,7 +24,6 @@ router.post('/member-join', verifyBotRequest, async (req, res) => {
         const userProfile = await User.findOne({ discordId: userId });
 
         if (!serverSettings || !serverSettings.verification) {
-            // If no settings, tell the bot to do nothing
             return res.json({ action: 'none' });
         }
 
@@ -40,12 +39,11 @@ router.post('/member-join', verifyBotRequest, async (req, res) => {
 
                 if (age < verificationSettings.ageGate.minAge || age > verificationSettings.ageGate.maxAge) {
                     return res.json({
-                        action: verificationSettings.ageGate.action, // 'kick' or 'ban'
-                        reason: `User's age (${age}) is outside the allowed range of ${verificationSettings.ageGate.minAge}-${verificationSettings.ageGate.maxAge}.`
+                        action: verificationSettings.ageGate.action,
+                        reason: `User's age (${age}) is outside the allowed range.`
                     });
                 }
             } else {
-                // If user has no birthday on record, treat as unverified
                  return res.json({
                     action: verificationSettings.unverifiedUserAction,
                     reason: 'User is unverified and could not be checked against the age gate.',
@@ -56,7 +54,6 @@ router.post('/member-join', verifyBotRequest, async (req, res) => {
 
         // 2. Check Verification Status
         if (userProfile && userProfile.isStripeVerified) {
-            // User is verified
             if (verificationSettings.verifiedUserAction === 'give_role') {
                 return res.json({
                     action: 'give_role',
@@ -64,7 +61,6 @@ router.post('/member-join', verifyBotRequest, async (req, res) => {
                 });
             }
         } else {
-            // User is unverified
             return res.json({
                 action: verificationSettings.unverifiedUserAction,
                 reason: 'User is not verified with Ulti-Bot.',
@@ -72,12 +68,43 @@ router.post('/member-join', verifyBotRequest, async (req, res) => {
             });
         }
 
-        // Default case: do nothing
         res.json({ action: 'none' });
 
     } catch (error) {
         console.error('Error in member-join check:', error);
         res.status(500).json({ error: 'Internal server error.' });
+    }
+});
+
+// This endpoint is called by the bot's commands to check permissions
+router.post('/guild/:guildId/check-permissions', verifyBotRequest, async (req, res) => {
+    const { guildId } = req.params;
+    const { userId, userRoles, commandName } = req.body; // commandName will be 'ban', 'kick', etc.
+
+    try {
+        const settings = await Server.findOne({ guildId });
+        if (!settings || !settings.staff || !settings.staff.isEnabled) {
+            return res.json({ permission: 'use_default' });
+        }
+
+        if (userRoles.includes(settings.staff.ownerRoleId)) {
+            return res.json({ permission: 'full' });
+        }
+
+        let highestPermission = 'none';
+        for (const team of settings.staff.teams) {
+            const userIsInTeam = team.roles.some(roleId => userRoles.includes(roleId));
+            if (userIsInTeam) {
+                highestPermission = team.permissions[commandName] || 'none';
+                break;
+            }
+        }
+        
+        res.json({ permission: highestPermission });
+
+    } catch (error) {
+        console.error('Permission check error:', error);
+        res.status(500).json({ error: 'Error checking permissions.' });
     }
 });
 
