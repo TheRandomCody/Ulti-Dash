@@ -79,7 +79,7 @@ router.post('/member-join', verifyBotRequest, async (req, res) => {
 // This endpoint is called by the bot's commands to check permissions
 router.post('/guild/:guildId/check-permissions', verifyBotRequest, async (req, res) => {
     const { guildId } = req.params;
-    const { userId, userRoles, commandName } = req.body; // commandName will be 'ban', 'kick', etc.
+    const { userRoles, commandName } = req.body;
 
     try {
         const settings = await Server.findOne({ guildId });
@@ -87,12 +87,18 @@ router.post('/guild/:guildId/check-permissions', verifyBotRequest, async (req, r
             return res.json({ permission: 'use_default' });
         }
 
-        if (userRoles.includes(settings.staff.ownerRoleId)) {
-            return res.json({ permission: 'full' });
+        const staffSettings = settings.staff;
+
+        if (userRoles.includes(staffSettings.ownerRoleId)) {
+            return res.json({ 
+                permission: 'full',
+                authLogChannelId: staffSettings.authLogChannelId,
+                authRequestStyle: staffSettings.authRequestStyle
+            });
         }
 
         let highestPermission = 'none';
-        for (const team of settings.staff.teams) {
+        for (const team of staffSettings.teams) {
             const userIsInTeam = team.roles.some(roleId => userRoles.includes(roleId));
             if (userIsInTeam) {
                 highestPermission = team.permissions[commandName] || 'none';
@@ -100,7 +106,11 @@ router.post('/guild/:guildId/check-permissions', verifyBotRequest, async (req, r
             }
         }
         
-        res.json({ permission: highestPermission });
+        res.json({ 
+            permission: highestPermission,
+            authLogChannelId: staffSettings.authLogChannelId,
+            authRequestStyle: staffSettings.authRequestStyle
+        });
 
     } catch (error) {
         console.error('Permission check error:', error);
