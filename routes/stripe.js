@@ -4,16 +4,7 @@ const router = express.Router();
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const User = require('../models/User');
 
-const verifyToken = (req, res, next) => {
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
-    if (token == null) return res.sendStatus(401);
-    req.token = token;
-    next();
-};
-
-// This route creates the Stripe Identity session
-router.post('/create-verification-session', verifyToken, async (req, res) => {
+router.post('/create-verification-session', async (req, res) => {
     try {
         const { discordId } = req.body;
         if (!discordId) {
@@ -28,7 +19,6 @@ router.post('/create-verification-session', verifyToken, async (req, res) => {
             return_url: 'https://www.ulti-bot.com/dashboard.html',
         });
 
-        // FIXED: Send the full URL provided by Stripe
         res.status(200).json({
             url: verificationSession.url 
         });
@@ -38,7 +28,6 @@ router.post('/create-verification-session', verifyToken, async (req, res) => {
     }
 });
 
-// This route handles the webhook notifications from Stripe
 router.post('/webhook', async (req, res) => {
     const sig = req.headers['stripe-signature'];
     const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -47,7 +36,6 @@ router.post('/webhook', async (req, res) => {
     try {
         event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
     } catch (err) {
-        console.error(`Webhook signature verification failed.`, err.message);
         return res.status(400).send(`Webhook Error: ${err.message}`);
     }
 
@@ -55,8 +43,6 @@ router.post('/webhook', async (req, res) => {
         const session = event.data.object;
         const discordId = session.metadata.discord_id;
         
-        console.log(`Verification successful for Discord ID: ${discordId}`);
-
         await User.findOneAndUpdate(
             { discordId: discordId },
             { $set: { isStripeVerified: true } }
