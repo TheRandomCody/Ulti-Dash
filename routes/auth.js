@@ -1,5 +1,5 @@
 // File: routes/auth.js
-// UPDATED: The /me endpoint now fetches fresh data from the database.
+// UPDATED: Added 'guilds' scope and now stores the access token in the session.
 
 const express = require('express');
 const axios = require('axios');
@@ -14,7 +14,9 @@ const usersRouter = express.Router();
 // Route 1: The initial login redirect.
 // Path: /api/auth/discord/login
 authRouter.get('/discord/login', (req, res) => {
-    const discordAuthUrl = `https://discord.com/api/oauth2/authorize?client_id=${process.env.CLIENT_ID}&redirect_uri=${encodeURIComponent(process.env.REDIRECT_URI)}&response_type=code&scope=identify`;
+    // ADDED 'guilds' to the scope to get the user's server list
+    const scope = ['identify', 'guilds'].join(' ');
+    const discordAuthUrl = `https://discord.com/api/oauth2/authorize?client_id=${process.env.CLIENT_ID}&redirect_uri=${encodeURIComponent(process.env.REDIRECT_URI)}&response_type=code&scope=${encodeURIComponent(scope)}`;
     res.redirect(discordAuthUrl);
 });
 
@@ -28,7 +30,7 @@ authRouter.get('/discord/callback', async (req, res) => {
 
     try {
         // Exchange the code for an access token
-        const tokenResponse = await axios.post('https://discord.com/api/oauth2/token', new URLSearchParams({
+        const tokenResponse = await axios.post('[https://discord.com/api/oauth2/token](https://discord.com/api/oauth2/token)', new URLSearchParams({
             client_id: process.env.CLIENT_ID,
             client_secret: process.env.CLIENT_SECRET,
             grant_type: 'authorization_code',
@@ -41,7 +43,7 @@ authRouter.get('/discord/callback', async (req, res) => {
         const accessToken = tokenResponse.data.access_token;
 
         // Use the access token to get the user's Discord profile
-        const userResponse = await axios.get('https://discord.com/api/users/@me', {
+        const userResponse = await axios.get('[https://discord.com/api/users/@me](https://discord.com/api/users/@me)', {
             headers: { 'Authorization': `Bearer ${accessToken}` }
         });
 
@@ -68,12 +70,13 @@ authRouter.get('/discord/callback', async (req, res) => {
             console.log(`User logged in: ${user.discordUsername}`);
         }
 
-        // Store user info in the session
+        // Store user info AND the access token in the session
         req.session.user = {
             id: user._id.toString(),
             discordId: user.discordId,
             username: user.discordUsername,
-            verificationStatus: user.verificationStatus
+            verificationStatus: user.verificationStatus,
+            accessToken: accessToken // Storing the token to make API calls on behalf of the user
         };
 
         // Redirect back to the frontend

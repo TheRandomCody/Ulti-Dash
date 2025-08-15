@@ -1,5 +1,5 @@
 // File: server.js
-// UPDATED with correct cookie settings for cross-domain authentication.
+// UPDATED: Now imports and uses the new servers router.
 
 // --- 1. SETUP & IMPORTS ---
 require('dotenv').config();
@@ -44,11 +44,13 @@ mongoose.connect(process.env.MONGO_URI)
 // Import the router files
 const authRoutes = require('./routes/auth');
 const stripeRoutes = require('./routes/stripe');
+const serverRoutes = require('./routes/servers'); // New route for servers
 
 // Tell the app to use the router files for specific paths
 app.use('/api/auth', authRoutes.authRouter);
 app.use('/api/users', authRoutes.usersRouter);
 app.use('/api/stripe', stripeRoutes);
+app.use('/api/servers', serverRoutes); // Use the new server routes
 
 // --- 5. START SERVER ---
 app.listen(PORT, () => {
