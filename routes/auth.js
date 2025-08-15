@@ -72,7 +72,7 @@ authRouter.get('/discord/callback', async (req, res) => {
         };
 
         // Redirect back to the frontend
-        res.redirect('http://12.0.0.1:5500/index.html');
+        res.redirect('https://www.ulti-bot.com');
 
     } catch (error) {
         console.error('Error during Discord OAuth callback:', error.response ? error.response.data : error.message);
@@ -88,7 +88,7 @@ authRouter.get('/logout', (req, res) => {
             return res.status(500).send('Could not log out.');
         }
         // Redirecting to frontend after logout
-        res.redirect('http://127.0.0.1:5500/index.html');
+        res.redirect('https://www.ulti-bot.com');
     });
 });
 

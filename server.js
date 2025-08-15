@@ -1,5 +1,5 @@
 // File: server.js
-// This is the main entry point. It's now much cleaner and only handles setup and middleware.
+// UPDATED with production frontend URL for CORS.
 
 // --- 1. SETUP & IMPORTS ---
 require('dotenv').config();
@@ -14,7 +14,7 @@ const PORT = process.env.PORT || 3000;
 
 // --- 2. MIDDLEWARE ---
 app.use(cors({
-    origin: '[http://127.0.0.1:5500](http://127.0.0.1:5500)',
+    origin: process.env.FRONTEND_URL, // Use the production URL from .env
     credentials: true
 }));
 
@@ -24,7 +24,8 @@ app.use(session({
     saveUninitialized: false,
     store: MongoStore.create({ mongoUrl: process.env.MONGO_URI }),
     cookie: {
-        secure: false, // Set to true if using HTTPS in production
+        secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
+        httpOnly: true,
         maxAge: 1000 * 60 * 60 * 24 * 7 // 1 week
     }
 }));
@@ -37,14 +38,14 @@ mongoose.connect(process.env.MONGO_URI)
 // --- 4. IMPORT & USE ROUTES ---
 // Import the router files
 const authRoutes = require('./routes/auth');
-const stripeRoutes = require('./routes/stripe'); // <-- ADD THIS LINE
+const stripeRoutes = require('./routes/stripe');
 
 // Tell the app to use the router files for specific paths
 app.use('/api/auth', authRoutes.authRouter);
 app.use('/api/users', authRoutes.usersRouter);
-app.use('/api/stripe', stripeRoutes); // <-- AND ADD THIS LINE
+app.use('/api/stripe', stripeRoutes);
 
 // --- 5. START SERVER ---
 app.listen(PORT, () => {
-    console.log(`🚀 Users Service listening on http://localhost:${PORT}`);
+    console.log(`🚀 Users Service listening on port ${PORT}`);
 });
