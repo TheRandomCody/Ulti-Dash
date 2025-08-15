@@ -5,11 +5,14 @@ const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const User = require('../models/User');
 
 router.post('/create-verification-session', async (req, res) => {
+    // Make sure the user is logged in first
+    if (!req.session.user) {
+        return res.status(401).json({ error: 'You must be logged in to verify.' });
+    }
+
     try {
-        const { discordId } = req.body;
-        if (!discordId) {
-            return res.status(400).json({ error: 'Discord ID is required.' });
-        }
+        const { discordId } = req.session.user; // Get the ID from the secure session
+        // ...
 
         const verificationSession = await stripe.identity.verificationSessions.create({
             type: 'document',
@@ -45,7 +48,7 @@ router.post('/webhook', async (req, res) => {
         
         await User.findOneAndUpdate(
             { discordId: discordId },
-            { $set: { isStripeVerified: true } }
+            { $set: { verificationStatus: 1 } }
         );
     }
 

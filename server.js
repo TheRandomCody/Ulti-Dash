@@ -1,36 +1,50 @@
-// server.js
+// File: server.js
+// This is the main entry point. It's now much cleaner and only handles setup and middleware.
+
+// --- 1. SETUP & IMPORTS ---
+require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
+const session = require('express-session');
+const MongoStore = require('connect-mongo');
 const cors = require('cors');
-require('dotenv').config();
 
 const app = express();
-const port = process.env.PORT || 3000;
-const mongoURI = process.env.MONGO_URI;
+const PORT = process.env.PORT || 3000;
 
-// --- MIDDLEWARE ---
-const corsOptions = {
-    origin: 'https://www.ulti-bot.com',
-    optionsSuccessStatus: 200
-};
-app.use(cors(corsOptions));
-// Stripe webhook requires the raw body, so it must be placed before express.json()
-app.use('/stripe/webhook', express.raw({type: 'application/json'}));
-app.use(express.json());
+// --- 2. MIDDLEWARE ---
+app.use(cors({
+    origin: '[http://127.0.0.1:5500](http://127.0.0.1:5500)',
+    credentials: true
+}));
 
-// --- DATABASE CONNECTION ---
-mongoose.connect(mongoURI)
-    .then(() => console.log('Successfully connected to MongoDB Atlas!'))
-    .catch(error => console.error('Error connecting to MongoDB Atlas:', error));
+app.use(session({
+    secret: process.env.SESSION_SECRET,
+    resave: false,
+    saveUninitialized: false,
+    store: MongoStore.create({ mongoUrl: process.env.MONGO_URI }),
+    cookie: {
+        secure: false, // Set to true if using HTTPS in production
+        maxAge: 1000 * 60 * 60 * 24 * 7 // 1 week
+    }
+}));
 
-// --- IMPORT & USE ROUTES ---
+// --- 3. DATABASE CONNECTION ---
+mongoose.connect(process.env.MONGO_URI)
+    .then(() => console.log('✅ MongoDB connected successfully.'))
+    .catch(err => console.error('❌ MongoDB connection error:', err));
+
+// --- 4. IMPORT & USE ROUTES ---
+// Import the router files
 const authRoutes = require('./routes/auth');
-const stripeRoutes = require('./routes/stripe');
+const stripeRoutes = require('./routes/stripe'); // <-- ADD THIS LINE
 
-app.use('/auth', authRoutes);
-app.use('/stripe', stripeRoutes);
+// Tell the app to use the router files for specific paths
+app.use('/api/auth', authRoutes.authRouter);
+app.use('/api/users', authRoutes.usersRouter);
+app.use('/api/stripe', stripeRoutes); // <-- AND ADD THIS LINE
 
-// --- START THE SERVER ---
-app.listen(port, () => {
-    console.log(`Website server listening on port ${port}`);
+// --- 5. START SERVER ---
+app.listen(PORT, () => {
+    console.log(`🚀 Users Service listening on http://localhost:${PORT}`);
 });

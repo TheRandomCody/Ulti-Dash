@@ -1,61 +1,110 @@
-// routes/auth.js
+// File: routes/auth.js
+// This new file contains all logic related to authentication and user profiles.
+
 const express = require('express');
 const axios = require('axios');
-const router = express.Router();
 const User = require('../models/User');
 
-const clientId = process.env.CLIENT_ID;
-const clientSecret = process.env.CLIENT_SECRET;
-const redirectUri = 'https://api.ulti-bot.com/auth/discord/callback';
+// Create separate routers for different logical groups of endpoints
+const authRouter = express.Router();
+const usersRouter = express.Router();
 
-router.get('/discord', (req, res) => {
-    const authorizationUri = `https://discord.com/api/oauth2/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=identify%20guilds`;
-    res.redirect(authorizationUri);
+// === DISCORD OAUTH2 FLOW ===
+
+// Route 1: The initial login redirect.
+// Path: /api/auth/discord/login
+authRouter.get('/discord/login', (req, res) => {
+    const discordAuthUrl = `https://discord.com/api/oauth2/authorize?client_id=${process.env.DISCORD_CLIENT_ID}&redirect_uri=${encodeURIComponent(process.env.REDIRECT_URI)}&response_type=code&scope=identify`;
+    res.redirect(discordAuthUrl);
 });
 
-router.get('/discord/callback', async (req, res) => {
+// Route 2: The callback from Discord.
+// Path: /api/auth/discord/callback
+authRouter.get('/discord/callback', async (req, res) => {
     const code = req.query.code;
-    if (!code) return res.status(400).send('No code provided.');
+    if (!code) {
+        return res.status(400).send('Error: No code provided from Discord.');
+    }
 
     try {
+        // Exchange the code for an access token
         const tokenResponse = await axios.post('https://discord.com/api/oauth2/token', new URLSearchParams({
-            client_id: clientId, client_secret: clientSecret, grant_type: 'authorization_code', code: code, redirect_uri: redirectUri,
-        }), { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } });
+            client_id: process.env.DISCORD_CLIENT_ID,
+            client_secret: process.env.DISCORD_CLIENT_SECRET,
+            grant_type: 'authorization_code',
+            code: code,
+            redirect_uri: process.env.REDIRECT_URI,
+        }), {
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+        });
+
         const accessToken = tokenResponse.data.access_token;
 
-        const userResponse = await axios.get('https://discord.com/api/users/@me', { headers: { 'Authorization': `Bearer ${accessToken}` } });
+        // Use the access token to get the user's Discord profile
+        const userResponse = await axios.get('https://discord.com/api/users/@me', {
+            headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+
         const discordUser = userResponse.data;
 
+        // Check if the user exists in our database, or create them
         let user = await User.findOne({ discordId: discordUser.id });
+
         if (!user) {
-            user = new User({ discordId: discordUser.id, username: discordUser.username, avatar: discordUser.avatar });
+            user = new User({
+                discordId: discordUser.id,
+                discordUsername: `${discordUser.username}#${discordUser.discriminator === '0' ? '' : discordUser.discriminator}`,
+                discordAvatar: `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png`,
+                verificationStatus: 0
+            });
             await user.save();
+            console.log(`New user created: ${user.discordUsername}`);
+        } else {
+            console.log(`User logged in: ${user.discordUsername}`);
         }
-        
-        res.redirect(`https://www.ulti-bot.com/auth-callback.html?accessToken=${accessToken}&destination=${encodeURIComponent('/dashboard.html')}`);
+
+        // Store user info in the session
+        req.session.user = {
+            id: user._id.toString(),
+            discordId: user.discordId,
+            username: user.discordUsername,
+            verificationStatus: user.verificationStatus
+        };
+
+        // Redirect back to the frontend
+        res.redirect('http://12.0.0.1:5500/index.html');
+
     } catch (error) {
-        console.error('Error during Discord OAuth2 flow:', error);
+        console.error('Error during Discord OAuth callback:', error.response ? error.response.data : error.message);
         res.status(500).send('An error occurred during authentication.');
     }
 });
 
-// A simple route for the dashboard to get basic user info
-const verifyToken = (req, res, next) => {
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
-    if (token == null) return res.sendStatus(401);
-    req.token = token;
-    next();
-};
-router.get('/user', verifyToken, async (req, res) => {
-    try {
-        const userResponse = await axios.get('https://discord.com/api/users/@me', {
-            headers: { 'Authorization': `Bearer ${req.token}` }
-        });
-        res.json(userResponse.data);
-    } catch (error) {
-        res.sendStatus(403);
+// Logout endpoint
+// Path: /api/auth/logout
+authRouter.get('/logout', (req, res) => {
+    req.session.destroy(err => {
+        if (err) {
+            return res.status(500).send('Could not log out.');
+        }
+        // Redirecting to frontend after logout
+        res.redirect('http://127.0.0.1:5500/index.html');
+    });
+});
+
+
+// === USER DATA ENDPOINT ===
+
+// An endpoint for the frontend to check if a user is logged in
+// and get their profile data.
+// Path: /api/users/me
+usersRouter.get('/me', (req, res) => {
+    if (req.session.user) {
+        res.json(req.session.user);
+    } else {
+        res.status(401).json({ message: 'Not authenticated' });
     }
 });
 
-module.exports = router;
+// Export the routers so they can be used in server.js
+module.exports = { authRouter, usersRouter };
