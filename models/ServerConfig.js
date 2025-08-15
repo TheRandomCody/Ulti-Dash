@@ -1,13 +1,7 @@
 // File: models/ServerConfig.js
-// UPDATED: Added all new modules to the schema.
+// This file is correct.
 
 const mongoose = require('mongoose');
-
-// Helper function to create a simple module schema
-const moduleSchema = {
-    enabled: { type: Boolean, default: false }
-    // We can add more specific settings to each module later
-};
 
 const serverConfigSchema = new mongoose.Schema({
     serverId: {
@@ -22,24 +16,24 @@ const serverConfigSchema = new mongoose.Schema({
         index: true
     },
     modules: {
-        leveling: moduleSchema,
-        economy: moduleSchema,
-        moderation: moduleSchema,
-        verification: moduleSchema,
-        welcome: moduleSchema,
-        inviteTracking: moduleSchema,
-        embeds: moduleSchema,
-        reactionRoles: moduleSchema,
-        autoRoles: moduleSchema,
-        birthdays: moduleSchema,
-        inServerGames: moduleSchema,
-        socialMediaAlerts: moduleSchema,
-        polls: moduleSchema,
-        tickets: moduleSchema,
-        autoModeration: moduleSchema,
-        announcements: moduleSchema,
-        autoresponder: moduleSchema,
-        logging: moduleSchema
+        leveling: { enabled: { type: Boolean, default: false } },
+        economy: { enabled: { type: Boolean, default: false } },
+        moderation: { enabled: { type: Boolean, default: false } },
+        verification: { enabled: { type: Boolean, default: false } },
+        welcome: { enabled: { type: Boolean, default: false } },
+        inviteTracking: { enabled: { type: Boolean, default: false } },
+        embeds: { enabled: { type: Boolean, default: false } },
+        reactionRoles: { enabled: { type: Boolean, default: false } },
+        autoRoles: { enabled: { type: Boolean, default: false } },
+        birthdays: { enabled: { type: Boolean, default: false } },
+        inServerGames: { enabled: { type: Boolean, default: false } },
+        socialMediaAlerts: { enabled: { type: Boolean, default: false } },
+        polls: { enabled: { type: Boolean, default: false } },
+        tickets: { enabled: { type: Boolean, default: false } },
+        autoModeration: { enabled: { type: Boolean, default: false } },
+        announcements: { enabled: { type: Boolean, default: false } },
+        autoresponder: { enabled: { type: Boolean, default: false } },
+        logging: { enabled: { type: Boolean, default: false } }
     }
 }, {
     timestamps: true
