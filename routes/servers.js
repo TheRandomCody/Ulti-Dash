@@ -1,5 +1,5 @@
 // File: routes/servers.js
-// UPDATED: Added new endpoints for fetching and updating a single server's config.
+// UPDATED: Added console.log statements for debugging the ownership check.
 
 const express = require('express');
 const axios = require('axios');
@@ -26,21 +26,33 @@ const isAdmin = (permissions) => {
 
 // A middleware to verify user is an admin of the server they're trying to access
 const verifyServerAdmin = async (req, res, next) => {
-    if (!req.session.user || !req.session.user.accessToken) {
+    if (!req.session.user) {
         return res.status(401).json({ message: 'Not authenticated.' });
     }
+    
     const { serverId } = req.params;
+    const userDiscordId = req.session.user.discordId;
+
     try {
-        const response = await axios.get('https://discord.com/api/users/@me/guilds', {
-            headers: { 'Authorization': `Bearer ${req.session.user.accessToken}` }
-        });
-        const userGuilds = response.data;
-        const targetGuild = userGuilds.find(g => g.id === serverId);
-        if (!targetGuild || !isAdmin(targetGuild.permissions)) {
+        const config = await ServerConfig.findOne({ serverId: serverId });
+        if (!config) {
+            return res.status(404).json({ message: 'Server not found in our system.' });
+        }
+
+        // --- DEBUGGING LOGS ---
+        console.log('--- Verifying Server Ownership ---');
+        console.log('Logged-in User ID:', userDiscordId);
+        console.log('Stored Owner ID:', config.ownerId);
+        console.log('Do they match?', config.ownerId === userDiscordId);
+        console.log('---------------------------------');
+
+        // Security Check: Is the logged-in user the owner of this server config?
+        if (config.ownerId !== userDiscordId) {
             return res.status(403).json({ message: 'You do not have permission to manage this server.' });
         }
-        // Attach guild info to the request object for later use
-        req.guild = targetGuild;
+        
+        // If they are the owner, attach the config to the request object and proceed.
+        req.serverConfig = config;
         next();
     } catch (error) {
         res.status(500).json({ message: 'Failed to verify server permissions.' });
@@ -81,18 +93,21 @@ router.get('/my-servers', async (req, res) => {
 // GET /api/servers/:serverId
 // Fetches the config for a single server.
 router.get('/:serverId', verifyServerAdmin, async (req, res) => {
+    // We can now directly use the config we attached in the middleware.
+    // We still need to fetch the server's name and icon for display.
     try {
-        const config = await ServerConfig.findOne({ serverId: req.params.serverId });
-        if (!config) {
-            return res.status(404).json({ message: 'Server not configured.' });
-        }
+        const response = await axios.get(`https://discord.com/api/guilds/${req.params.serverId}`, {
+            headers: { 'Authorization': `Bot ${process.env.BOT_TOKEN}` }
+        });
+        const guild = response.data;
+
         res.json({
-            name: req.guild.name,
-            icon: req.guild.icon ? `https://cdn.discordapp.com/icons/${req.guild.id}/${req.guild.icon}.png` : null,
-            modules: config.modules
+            name: guild.name,
+            icon: guild.icon ? `https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png` : null,
+            modules: req.serverConfig.modules
         });
     } catch (error) {
-        res.status(500).json({ message: 'Error fetching server configuration.' });
+        res.status(500).json({ message: 'Error fetching server details from Discord.' });
     }
 });
 
