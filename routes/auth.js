@@ -1,5 +1,5 @@
 // File: routes/auth.js
-// UPDATED: Added 'guilds' scope and now stores the access token in the session.
+// FIXED: Removed markdown formatting from URLs.
 
 const express = require('express');
 const axios = require('axios');
