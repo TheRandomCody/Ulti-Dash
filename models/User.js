@@ -1,6 +1,5 @@
 // File: models/User.js
-// This defines the schema for our 'User' documents in MongoDB.
-// No changes needed here.
+// UPDATED with a more comprehensive schema for future features.
 
 const mongoose = require('mongoose');
 
