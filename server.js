@@ -1,5 +1,5 @@
 // File: server.js
-// UPDATED: Now imports and uses the new servers router.
+// FIXED: Added express.json() middleware to parse JSON request bodies.
 
 // --- 1. SETUP & IMPORTS ---
 require('dotenv').config();
@@ -20,6 +20,9 @@ app.use(cors({
     origin: process.env.FRONTEND_URL, // Use the production URL from .env
     credentials: true
 }));
+
+// Add this before the session middleware to parse JSON bodies
+app.use(express.json());
 
 app.use(session({
     secret: process.env.SESSION_SECRET,
