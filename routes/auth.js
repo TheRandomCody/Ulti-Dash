@@ -14,7 +14,7 @@ const usersRouter = express.Router();
 // Route 1: The initial login redirect.
 // Path: /api/auth/discord/login
 authRouter.get('/discord/login', (req, res) => {
-    const discordAuthUrl = `https://discord.com/api/oauth2/authorize?client_id=${process.env.DISCORD_CLIENT_ID}&redirect_uri=${encodeURIComponent(process.env.REDIRECT_URI)}&response_type=code&scope=identify`;
+    const discordAuthUrl = `https://discord.com/api/oauth2/authorize?client_id=${process.env.CLIENT_ID}&redirect_uri=${encodeURIComponent(process.env.REDIRECT_URI)}&response_type=code&scope=identify`;
     res.redirect(discordAuthUrl);
 });
 
@@ -29,8 +29,8 @@ authRouter.get('/discord/callback', async (req, res) => {
     try {
         // Exchange the code for an access token
         const tokenResponse = await axios.post('https://discord.com/api/oauth2/token', new URLSearchParams({
-            client_id: process.env.DISCORD_CLIENT_ID,
-            client_secret: process.env.DISCORD_CLIENT_SECRET,
+            client_id: process.env.CLIENT_ID,
+            client_secret: process.env.CLIENT_SECRET,
             grant_type: 'authorization_code',
             code: code,
             redirect_uri: process.env.REDIRECT_URI,
