@@ -1,7 +1,13 @@
 // File: models/ServerConfig.js
-// NEW FILE: Defines the schema for server-specific settings.
+// UPDATED: Added all new modules to the schema.
 
 const mongoose = require('mongoose');
+
+// Helper function to create a simple module schema
+const moduleSchema = {
+    enabled: { type: Boolean, default: false }
+    // We can add more specific settings to each module later
+};
 
 const serverConfigSchema = new mongoose.Schema({
     serverId: {
@@ -16,16 +22,24 @@ const serverConfigSchema = new mongoose.Schema({
         index: true
     },
     modules: {
-        welcomeMessage: {
-            enabled: { type: Boolean, default: false },
-            channelId: { type: String },
-            message: { type: String }
-        },
-        moderation: {
-            enabled: { type: Boolean, default: false },
-            logChannelId: { type: String }
-        }
-        // Add other modules here as they are developed
+        leveling: moduleSchema,
+        economy: moduleSchema,
+        moderation: moduleSchema,
+        verification: moduleSchema,
+        welcome: moduleSchema,
+        inviteTracking: moduleSchema,
+        embeds: moduleSchema,
+        reactionRoles: moduleSchema,
+        autoRoles: moduleSchema,
+        birthdays: moduleSchema,
+        inServerGames: moduleSchema,
+        socialMediaAlerts: moduleSchema,
+        polls: moduleSchema,
+        tickets: moduleSchema,
+        autoModeration: moduleSchema,
+        announcements: moduleSchema,
+        autoresponder: moduleSchema,
+        logging: moduleSchema
     }
 }, {
     timestamps: true
