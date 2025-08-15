@@ -12,12 +12,26 @@ const levelingModuleSchema = new mongoose.Schema({
     xpPerMessage: { type: Number, default: 15 },
     xpCooldownSeconds: { type: Number, default: 60 },
     ignoredRoles: [{ type: String }],
-    levelUpMessage: { type: String, default: 'Congratulations {user}, you have reached level {level}!' },
+    levelUpMessage: {
+        isEmbed: { type: Boolean, default: false },
+        content: { type: String, default: 'Congratulations {user}, you have reached level {level}!' },
+        embed: {
+            title: { type: String },
+            description: { type: String },
+            color: { type: String },
+            imageUrl: { type: String }
+        }
+    },
     levelUpChannel: { type: String, default: 'current' }, // 'current' or a channel ID
     roleRewards: [{
         level: { type: Number, required: true },
         roleId: { type: String, required: true }
-    }]
+    }],
+    punishmentSettings: {
+        onWarn: { type: String, enum: ['none', 'reset_xp', 'deduct_xp'], default: 'none' },
+        onMute: { type: String, enum: ['none', 'reset_xp', 'deduct_xp', 'deduct_level'], default: 'none' },
+        deductXpAmount: { type: Number, default: 500 }
+    }
 });
 
 const verificationModuleSchema = new mongoose.Schema({

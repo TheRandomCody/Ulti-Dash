@@ -1,9 +1,11 @@
 // File: routes/servers.js
-// UPDATED: Added a new endpoint to fetch server roles and channels.
+// UPDATED: Added endpoints for leaderboard and creating roles.
 
 const express = require('express');
 const axios = require('axios');
 const ServerConfig = require('../models/ServerConfig');
+const LevelingProfile = require('../models/LevelingProfile');
+const User = require('../models/User');
 
 const router = express.Router();
 
@@ -61,7 +63,7 @@ router.get('/my-servers', async (req, res) => {
         return res.status(401).json({ message: 'Not authenticated or access token missing.' });
     }
     try {
-        const response = await axios.get('https://discord.com/api/users/@me/guilds', {
+        const response = await axios.get('[https://discord.com/api/users/@me/guilds](https://discord.com/api/users/@me/guilds)', {
             headers: { 'Authorization': `Bearer ${req.session.user.accessToken}` }
         });
         const userGuilds = response.data;
@@ -191,6 +193,55 @@ router.patch('/:serverId/modules/leveling', verifyServerAdmin, async (req, res) 
         res.status(200).json({ message: 'Leveling settings updated.' });
     } catch (error) {
         res.status(500).json({ message: 'Error updating leveling settings.' });
+    }
+});
+
+// GET /api/servers/:serverId/leaderboard
+// Fetches the leveling leaderboard for a server.
+router.get('/:serverId/leaderboard', verifyServerAdmin, async (req, res) => {
+    const { serverId } = req.params;
+    try {
+        const topUsers = await LevelingProfile.find({ serverId })
+            .sort({ level: -1, xp: -1 })
+            .limit(10);
+        
+        const userIds = topUsers.map(u => u.userId);
+        const userProfiles = await User.find({ discordId: { $in: userIds } });
+
+        const leaderboard = topUsers.map(profile => {
+            const user = userProfiles.find(p => p.discordId === profile.userId);
+            return {
+                username: user ? user.discordUsername : 'Unknown User',
+                avatar: user ? user.discordAvatar : null,
+                level: profile.level,
+                xp: profile.xp
+            };
+        });
+
+        res.json(leaderboard);
+    } catch (error) {
+        res.status(500).json({ message: 'Error fetching leaderboard.' });
+    }
+});
+
+// POST /api/servers/:serverId/roles
+// Creates a new role in the Discord server.
+router.post('/:serverId/roles', verifyServerAdmin, async (req, res) => {
+    const { serverId } = req.params;
+    const { name } = req.body;
+
+    if (!name) {
+        return res.status(400).json({ message: 'Role name is required.' });
+    }
+
+    try {
+        const response = await axios.post(`https://discord.com/api/guilds/${serverId}/roles`, 
+            { name: name },
+            { headers: { 'Authorization': `Bot ${process.env.BOT_TOKEN}` } }
+        );
+        res.status(201).json(response.data); // Return the newly created role object
+    } catch (error) {
+        res.status(500).json({ message: 'Failed to create role in Discord.' });
     }
 });
 
