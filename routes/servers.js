@@ -1,5 +1,5 @@
 // File: routes/servers.js
-// UPDATED: The leveling GET endpoint is now more resilient.
+// UPDATED: Added a new endpoint to fetch server roles and channels.
 
 const express = require('express');
 const axios = require('axios');
@@ -102,6 +102,33 @@ router.get('/:serverId', verifyServerAdmin, async (req, res) => {
     }
 });
 
+// GET /api/servers/:serverId/data
+// Fetches server data like roles and channels for populating dropdowns.
+router.get('/:serverId/data', verifyServerAdmin, async (req, res) => {
+    try {
+        // Fetch roles
+        const rolesResponse = await axios.get(`https://discord.com/api/guilds/${req.params.serverId}/roles`, {
+            headers: { 'Authorization': `Bot ${process.env.BOT_TOKEN}` }
+        });
+        // Fetch channels
+        const channelsResponse = await axios.get(`https://discord.com/api/guilds/${req.params.serverId}/channels`, {
+            headers: { 'Authorization': `Bot ${process.env.BOT_TOKEN}` }
+        });
+
+        // Filter for text channels only (type 0)
+        const textChannels = channelsResponse.data.filter(c => c.type === 0);
+
+        res.json({
+            roles: rolesResponse.data,
+            channels: textChannels
+        });
+    } catch (error) {
+        console.error('Error fetching server data:', error.response ? error.response.data : error.message);
+        res.status(500).json({ message: 'Error fetching server data from Discord.' });
+    }
+});
+
+
 // PATCH /api/servers/:serverId/modules/:moduleName
 // Toggles a module on or off.
 router.patch('/:serverId/modules/:moduleName', verifyServerAdmin, async (req, res) => {
@@ -135,10 +162,8 @@ router.patch('/:serverId/modules/:moduleName', verifyServerAdmin, async (req, re
 router.get('/:serverId/modules/leveling', verifyServerAdmin, async (req, res) => {
     const config = req.serverConfig;
     
-    // If the leveling config doesn't exist yet (e.g., for an older server doc),
-    // create it with default values.
     if (!config.modules.leveling) {
-        config.modules.leveling = {}; // Mongoose will apply defaults from the schema
+        config.modules.leveling = {}; 
         await config.save();
     }
     
