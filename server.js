@@ -1,5 +1,5 @@
 // File: server.js
-// UPDATED with production frontend URL for CORS.
+// UPDATED with correct cookie settings for cross-domain authentication.
 
 // --- 1. SETUP & IMPORTS ---
 require('dotenv').config();
@@ -11,6 +11,9 @@ const cors = require('cors');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// This is needed for Render to trust the proxy and for secure cookies to work.
+app.set('trust proxy', 1);
 
 // --- 2. MIDDLEWARE ---
 app.use(cors({
@@ -24,9 +27,11 @@ app.use(session({
     saveUninitialized: false,
     store: MongoStore.create({ mongoUrl: process.env.MONGO_URI }),
     cookie: {
-        secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
+        secure: true, // Must be true for sameSite:'none' to work
         httpOnly: true,
-        maxAge: 1000 * 60 * 60 * 24 * 7 // 1 week
+        maxAge: 1000 * 60 * 60 * 24 * 7, // 1 week
+        sameSite: 'none', // Allows the cookie to be sent from a different domain
+        domain: 'ulti-bot.com' // Set the parent domain
     }
 }));
 
