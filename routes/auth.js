@@ -43,7 +43,7 @@ authRouter.get('/discord/callback', async (req, res) => {
         const accessToken = tokenResponse.data.access_token;
 
         // Use the access token to get the user's Discord profile
-        const userResponse = await axios.get('[https://discord.com/api/users/@me](https://discord.com/api/users/@me)', {
+        const userResponse = await axios.get('https://discord.com/api/users/@me', {
             headers: { 'Authorization': `Bearer ${accessToken}` }
         });
 
