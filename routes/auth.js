@@ -1,5 +1,5 @@
 // File: routes/auth.js
-// This new file contains all logic related to authentication and user profiles.
+// UPDATED: The /me endpoint now fetches fresh data from the database.
 
 const express = require('express');
 const axios = require('axios');
@@ -51,10 +51,15 @@ authRouter.get('/discord/callback', async (req, res) => {
         let user = await User.findOne({ discordId: discordUser.id });
 
         if (!user) {
+            // Calculate account creation date from Discord ID (Snowflake)
+            const accountCreationTimestamp = (BigInt(discordUser.id) >> 22n) + 1420070400000n;
+            const accountCreationDate = new Date(Number(accountCreationTimestamp));
+
             user = new User({
                 discordId: discordUser.id,
                 discordUsername: `${discordUser.username}#${discordUser.discriminator === '0' ? '' : discordUser.discriminator}`,
                 discordAvatar: `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png`,
+                discordAccountCreatedAt: accountCreationDate,
                 verificationStatus: 0
             });
             await user.save();
@@ -72,7 +77,7 @@ authRouter.get('/discord/callback', async (req, res) => {
         };
 
         // Redirect back to the frontend
-        res.redirect('https://www.ulti-bot.com');
+        res.redirect(process.env.FRONTEND_URL);
 
     } catch (error) {
         console.error('Error during Discord OAuth callback:', error.response ? error.response.data : error.message);
@@ -88,7 +93,7 @@ authRouter.get('/logout', (req, res) => {
             return res.status(500).send('Could not log out.');
         }
         // Redirecting to frontend after logout
-        res.redirect('https://www.ulti-bot.com');
+        res.redirect(process.env.FRONTEND_URL);
     });
 });
 
@@ -98,11 +103,31 @@ authRouter.get('/logout', (req, res) => {
 // An endpoint for the frontend to check if a user is logged in
 // and get their profile data.
 // Path: /api/users/me
-usersRouter.get('/me', (req, res) => {
-    if (req.session.user) {
-        res.json(req.session.user);
-    } else {
-        res.status(401).json({ message: 'Not authenticated' });
+usersRouter.get('/me', async (req, res) => {
+    if (!req.session.user) {
+        return res.status(401).json({ message: 'Not authenticated' });
+    }
+
+    try {
+        // Fetch the most up-to-date user info from the database
+        const user = await User.findById(req.session.user.id);
+        if (!user) {
+            // If user is not found (e.g., deleted), destroy the session
+            req.session.destroy();
+            return res.status(401).json({ message: 'User not found.' });
+        }
+
+        // Return the relevant, fresh user data
+        res.json({
+            id: user._id.toString(),
+            discordId: user.discordId,
+            username: user.discordUsername,
+            verificationStatus: user.verificationStatus
+        });
+
+    } catch (error) {
+        console.error('Error fetching user data for /me:', error);
+        res.status(500).json({ message: 'Server error while fetching user data.' });
     }
 });
 
