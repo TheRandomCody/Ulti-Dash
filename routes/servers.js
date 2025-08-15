@@ -13,7 +13,7 @@ const requireBotAuth = (req, res, next) => {
     const authHeader = req.headers['authorization'];
     const secret = authHeader && authHeader.split(' ')[1];
 
-    if (secret === process.env.BOT_API_SECRET) {
+    if (secret === process.env.CLIENT_SECRET) {
         next(); // The secret is valid, proceed.
     } else {
         res.status(401).json({ message: 'Unauthorized: Invalid bot secret.' });
