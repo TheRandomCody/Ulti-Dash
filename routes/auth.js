@@ -30,7 +30,7 @@ authRouter.get('/discord/callback', async (req, res) => {
 
     try {
         // Exchange the code for an access token
-        const tokenResponse = await axios.post('[https://discord.com/api/oauth2/token](https://discord.com/api/oauth2/token)', new URLSearchParams({
+        const tokenResponse = await axios.post('https://discord.com/api/oauth2/token', new URLSearchParams({
             client_id: process.env.CLIENT_ID,
             client_secret: process.env.CLIENT_SECRET,
             grant_type: 'authorization_code',
