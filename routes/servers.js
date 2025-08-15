@@ -1,5 +1,5 @@
 // File: routes/servers.js
-// UPDATED: Added console.log statements for debugging the ownership check.
+// UPDATED: The leveling GET endpoint is now more resilient.
 
 const express = require('express');
 const axios = require('axios');
@@ -38,13 +38,6 @@ const verifyServerAdmin = async (req, res, next) => {
         if (!config) {
             return res.status(404).json({ message: 'Server not found in our system.' });
         }
-
-        // --- DEBUGGING LOGS ---
-        console.log('--- Verifying Server Ownership ---');
-        console.log('Logged-in User ID:', userDiscordId);
-        console.log('Stored Owner ID:', config.ownerId);
-        console.log('Do they match?', config.ownerId === userDiscordId);
-        console.log('---------------------------------');
 
         // Security Check: Is the logged-in user the owner of this server config?
         if (config.ownerId !== userDiscordId) {
@@ -93,8 +86,6 @@ router.get('/my-servers', async (req, res) => {
 // GET /api/servers/:serverId
 // Fetches the config for a single server.
 router.get('/:serverId', verifyServerAdmin, async (req, res) => {
-    // We can now directly use the config we attached in the middleware.
-    // We still need to fetch the server's name and icon for display.
     try {
         const response = await axios.get(`https://discord.com/api/guilds/${req.params.serverId}`, {
             headers: { 'Authorization': `Bot ${process.env.BOT_TOKEN}` }
@@ -115,7 +106,7 @@ router.get('/:serverId', verifyServerAdmin, async (req, res) => {
 // Toggles a module on or off.
 router.patch('/:serverId/modules/:moduleName', verifyServerAdmin, async (req, res) => {
     const { serverId, moduleName } = req.params;
-    const { enabled } = req.body; // Expecting { "enabled": true } or { "enabled": false }
+    const { enabled } = req.body;
 
     if (typeof enabled !== 'boolean') {
         return res.status(400).json({ message: 'Invalid "enabled" value.' });
@@ -134,6 +125,47 @@ router.patch('/:serverId/modules/:moduleName', verifyServerAdmin, async (req, re
         res.status(200).json({ message: `${moduleName} module updated.` });
     } catch (error) {
         res.status(500).json({ message: 'Error updating module.' });
+    }
+});
+
+// --- Leveling Module Endpoints ---
+
+// GET /api/servers/:serverId/modules/leveling
+// Gets the detailed settings for the leveling module.
+router.get('/:serverId/modules/leveling', verifyServerAdmin, async (req, res) => {
+    const config = req.serverConfig;
+    
+    // If the leveling config doesn't exist yet (e.g., for an older server doc),
+    // create it with default values.
+    if (!config.modules.leveling) {
+        config.modules.leveling = {}; // Mongoose will apply defaults from the schema
+        await config.save();
+    }
+    
+    res.json(config.modules.leveling);
+});
+
+// PATCH /api/servers/:serverId/modules/leveling
+// Updates the detailed settings for the leveling module.
+router.patch('/:serverId/modules/leveling', verifyServerAdmin, async (req, res) => {
+    const { serverId } = req.params;
+    const settings = req.body;
+
+    try {
+        // Construct the update object to avoid overwriting the entire module
+        const update = {};
+        for (const key in settings) {
+            update[`modules.leveling.${key}`] = settings[key];
+        }
+
+        const result = await ServerConfig.updateOne({ serverId }, { $set: update });
+
+        if (result.matchedCount === 0) {
+            return res.status(404).json({ message: 'Server not found.' });
+        }
+        res.status(200).json({ message: 'Leveling settings updated.' });
+    } catch (error) {
+        res.status(500).json({ message: 'Error updating leveling settings.' });
     }
 });
 

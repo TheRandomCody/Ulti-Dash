@@ -3,6 +3,31 @@
 
 const mongoose = require('mongoose');
 
+const simpleModuleSchema = {
+    enabled: { type: Boolean, default: false }
+};
+
+const levelingModuleSchema = new mongoose.Schema({
+    enabled: { type: Boolean, default: false },
+    xpPerMessage: { type: Number, default: 15 },
+    xpCooldownSeconds: { type: Number, default: 60 },
+    ignoredRoles: [{ type: String }],
+    levelUpMessage: { type: String, default: 'Congratulations {user}, you have reached level {level}!' },
+    levelUpChannel: { type: String, default: 'current' }, // 'current' or a channel ID
+    roleRewards: [{
+        level: { type: Number, required: true },
+        roleId: { type: String, required: true }
+    }]
+});
+
+const verificationModuleSchema = new mongoose.Schema({
+    enabled: { type: Boolean, default: false },
+    verificationRole: { type: String }, // Role to give after verification
+    unverifiedRole: { type: String }, // Role to give to new members
+    verificationChannel: { type: String }, // Channel where verification happens
+    verificationType: { type: String, enum: ['button', 'command'], default: 'button' }
+});
+
 const serverConfigSchema = new mongoose.Schema({
     serverId: {
         type: String,
