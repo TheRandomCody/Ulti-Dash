@@ -1,5 +1,5 @@
 // File: routes/servers.js
-// UPDATED: Added endpoints for leaderboard and creating roles.
+// UPDATED: The PATCH endpoint for leveling settings is now more robust.
 
 const express = require('express');
 const axios = require('axios');
@@ -179,10 +179,23 @@ router.patch('/:serverId/modules/leveling', verifyServerAdmin, async (req, res) 
     const settings = req.body;
 
     try {
-        // Construct the update object to avoid overwriting the entire module
+        // This function flattens the nested settings object for safe updating
+        const flattenObject = (obj, prefix = '') =>
+            Object.keys(obj).reduce((acc, k) => {
+                const pre = prefix.length ? prefix + '.' : '';
+                if (typeof obj[k] === 'object' && obj[k] !== null && !Array.isArray(obj[k])) {
+                    Object.assign(acc, flattenObject(obj[k], pre + k));
+                } else {
+                    acc[pre + k] = obj[k];
+                }
+                return acc;
+            }, {});
+
+        const flattenedSettings = flattenObject(settings);
+        
         const update = {};
-        for (const key in settings) {
-            update[`modules.leveling.${key}`] = settings[key];
+        for (const key in flattenedSettings) {
+            update[`modules.leveling.${key}`] = flattenedSettings[key];
         }
 
         const result = await ServerConfig.updateOne({ serverId }, { $set: update });
@@ -192,6 +205,7 @@ router.patch('/:serverId/modules/leveling', verifyServerAdmin, async (req, res) 
         }
         res.status(200).json({ message: 'Leveling settings updated.' });
     } catch (error) {
+        console.error('Error updating leveling settings:', error);
         res.status(500).json({ message: 'Error updating leveling settings.' });
     }
 });
