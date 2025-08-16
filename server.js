@@ -19,11 +19,16 @@ mongoose.connect(process.env.MONGO_URI)
 // --- MIDDLEWARE SETUP ---
 
 // 1. CORS - To control which domains can access the API
+// In server.js
+
 const corsOptions = {
-  origin: 'https://www.ulti-bot.com', // Allow requests from our frontend
-  credentials: true // This allows session cookies to be sent back and forth
+  origin: [
+    'https://www.ulti-bot.com', // Your production frontend
+    'http://127.0.0.1:5500',    // Common local server address
+    null                       // Allows opening index.html directly as a file
+  ],
+  credentials: true
 };
-app.use(cors(corsOptions));
 
 // 2. Express Session - To manage user sessions
 app.use(session({
