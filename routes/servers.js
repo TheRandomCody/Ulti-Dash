@@ -1,5 +1,5 @@
 // File: routes/servers.js
-// UPDATED: The PATCH endpoint for leveling settings is now simpler and more reliable.
+// FIXED: The PATCH endpoint for leveling settings and the GET my-servers endpoint are now correct.
 
 const express = require('express');
 const axios = require('axios');
@@ -176,21 +176,23 @@ router.get('/:serverId/modules/leveling', verifyServerAdmin, async (req, res) =>
 // Updates the detailed settings for the leveling module.
 router.patch('/:serverId/modules/leveling', verifyServerAdmin, async (req, res) => {
     const { serverId } = req.params;
-    const settings = req.body;
+    const newSettings = req.body;
 
     try {
-        // This is a simpler and more direct way to update the nested object
-        const result = await ServerConfig.updateOne(
-            { serverId },
-            { $set: { "modules.leveling": settings } }
-        );
+        const config = req.serverConfig;
+        
+        // Merge the new settings into the existing configuration
+        Object.assign(config.modules.leveling, newSettings);
 
-        if (result.matchedCount === 0) {
-            return res.status(404).json({ message: 'Server not found.' });
-        }
+        await config.save();
+
         res.status(200).json({ message: 'Leveling settings updated.' });
     } catch (error) {
         console.error('Error updating leveling settings:', error);
+        // Provide a more detailed error message if validation fails
+        if (error.name === 'ValidationError') {
+            return res.status(400).json({ message: error.message });
+        }
         res.status(500).json({ message: 'Error updating leveling settings.' });
     }
 });
