@@ -63,7 +63,7 @@ router.get('/my-servers', async (req, res) => {
         return res.status(401).json({ message: 'Not authenticated or access token missing.' });
     }
     try {
-        const response = await axios.get('[https://discord.com/api/users/@me/guilds](https://discord.com/api/users/@me/guilds)', {
+        const response = await axios.get('https://discord.com/api/users/@me/guilds', {
             headers: { 'Authorization': `Bearer ${req.session.user.accessToken}` }
         });
         const userGuilds = response.data;
