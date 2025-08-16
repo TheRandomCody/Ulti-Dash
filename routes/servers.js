@@ -1,5 +1,5 @@
 // File: routes/servers.js
-// FIXED: The PATCH endpoint for leveling settings and the GET my-servers endpoint are now correct.
+// FIXED: The PATCH endpoint for leveling settings now uses a robust deep-merge strategy.
 
 const express = require('express');
 const axios = require('axios');
@@ -175,21 +175,36 @@ router.get('/:serverId/modules/leveling', verifyServerAdmin, async (req, res) =>
 // PATCH /api/servers/:serverId/modules/leveling
 // Updates the detailed settings for the leveling module.
 router.patch('/:serverId/modules/leveling', verifyServerAdmin, async (req, res) => {
-    const { serverId } = req.params;
-    const newSettings = req.body;
+    // Destructure the nested objects from the rest of the settings
+    const { levelUpMessage, punishmentSettings, ...otherSettings } = req.body;
 
     try {
         const config = req.serverConfig;
         
-        // Merge the new settings into the existing configuration
-        Object.assign(config.modules.leveling, newSettings);
+        // 1. Merge the simple, top-level properties
+        Object.assign(config.modules.leveling, otherSettings);
+
+        // 2. Merge the nested objects individually to prevent overwriting
+        if (levelUpMessage) {
+            // Ensure the nested object exists before assigning to it
+            if (!config.modules.leveling.levelUpMessage) {
+                config.modules.leveling.levelUpMessage = {};
+            }
+            Object.assign(config.modules.leveling.levelUpMessage, levelUpMessage);
+        }
+        if (punishmentSettings) {
+            // Ensure the nested object exists before assigning to it
+            if (!config.modules.leveling.punishmentSettings) {
+                config.modules.leveling.punishmentSettings = {};
+            }
+            Object.assign(config.modules.leveling.punishmentSettings, punishmentSettings);
+        }
 
         await config.save();
 
         res.status(200).json({ message: 'Leveling settings updated.' });
     } catch (error) {
         console.error('Error updating leveling settings:', error);
-        // Provide a more detailed error message if validation fails
         if (error.name === 'ValidationError') {
             return res.status(400).json({ message: error.message });
         }
