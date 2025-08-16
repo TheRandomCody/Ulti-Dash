@@ -12,16 +12,7 @@ const levelingModuleSchema = new mongoose.Schema({
     xpPerMessage: { type: Number, default: 15 },
     xpCooldownSeconds: { type: Number, default: 60 },
     ignoredRoles: [{ type: String }],
-    levelUpMessage: {
-        isEmbed: { type: Boolean, default: false },
-        content: { type: String, default: 'Congratulations {user}, you have reached level {level}!' },
-        embed: {
-            title: { type: String },
-            description: { type: String },
-            color: { type: String },
-            imageUrl: { type: String }
-        }
-    },
+    levelUpMessage: { type: String, default: 'Congratulations {user}, you have reached level {level}!' },
     levelUpChannel: { type: String, default: 'current' }, // 'current' or a channel ID
     roleRewards: [{
         level: { type: Number, required: true },

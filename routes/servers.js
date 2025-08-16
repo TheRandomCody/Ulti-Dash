@@ -1,5 +1,5 @@
 // File: routes/servers.js
-// FIXED: The PATCH endpoint for leveling settings now uses a robust deep-merge strategy.
+// UPDATED: The PATCH endpoint for leveling settings is now simpler and more reliable.
 
 const express = require('express');
 const axios = require('axios');
@@ -63,7 +63,7 @@ router.get('/my-servers', async (req, res) => {
         return res.status(401).json({ message: 'Not authenticated or access token missing.' });
     }
     try {
-        const response = await axios.get('https://discord.com/api/users/@me/guilds', {
+        const response = await axios.get('[https://discord.com/api/users/@me/guilds](https://discord.com/api/users/@me/guilds)', {
             headers: { 'Authorization': `Bearer ${req.session.user.accessToken}` }
         });
         const userGuilds = response.data;
@@ -175,39 +175,21 @@ router.get('/:serverId/modules/leveling', verifyServerAdmin, async (req, res) =>
 // PATCH /api/servers/:serverId/modules/leveling
 // Updates the detailed settings for the leveling module.
 router.patch('/:serverId/modules/leveling', verifyServerAdmin, async (req, res) => {
-    // Destructure the nested objects from the rest of the settings
-    const { levelUpMessage, punishmentSettings, ...otherSettings } = req.body;
+    const { serverId } = req.params;
+    const newSettings = req.body;
 
     try {
-        const config = req.serverConfig;
-        
-        // 1. Merge the simple, top-level properties
-        Object.assign(config.modules.leveling, otherSettings);
+        const result = await ServerConfig.updateOne(
+            { serverId },
+            { $set: { "modules.leveling": newSettings } }
+        );
 
-        // 2. Merge the nested objects individually to prevent overwriting
-        if (levelUpMessage) {
-            // Ensure the nested object exists before assigning to it
-            if (!config.modules.leveling.levelUpMessage) {
-                config.modules.leveling.levelUpMessage = {};
-            }
-            Object.assign(config.modules.leveling.levelUpMessage, levelUpMessage);
+        if (result.matchedCount === 0) {
+            return res.status(404).json({ message: 'Server not found.' });
         }
-        if (punishmentSettings) {
-            // Ensure the nested object exists before assigning to it
-            if (!config.modules.leveling.punishmentSettings) {
-                config.modules.leveling.punishmentSettings = {};
-            }
-            Object.assign(config.modules.leveling.punishmentSettings, punishmentSettings);
-        }
-
-        await config.save();
-
         res.status(200).json({ message: 'Leveling settings updated.' });
     } catch (error) {
         console.error('Error updating leveling settings:', error);
-        if (error.name === 'ValidationError') {
-            return res.status(400).json({ message: error.message });
-        }
         res.status(500).json({ message: 'Error updating leveling settings.' });
     }
 });
