@@ -1,61 +1,57 @@
-// File: server.js
-// FIXED: Added express.json() middleware to parse JSON request bodies.
-
-// --- 1. SETUP & IMPORTS ---
+// Load environment variables from a .env file
 require('dotenv').config();
 const express = require('express');
-const mongoose = require('mongoose');
 const session = require('express-session');
-const MongoStore = require('connect-mongo');
 const cors = require('cors');
+const mongoose = require('mongoose');
+const MongoStore = require('connect-mongo');
 
+// --- INITIALIZE APP ---
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// This is needed for Render to trust the proxy and for secure cookies to work.
-app.set('trust proxy', 1);
+// --- DATABASE CONNECTION ---
+// Make sure to add your MONGO_URI to the .env file
+mongoose.connect(process.env.MONGO_URI)
+  .then(() => console.log('Successfully connected to MongoDB.'))
+  .catch(err => console.error('MongoDB connection error:', err));
 
-// --- 2. MIDDLEWARE ---
-app.use(cors({
-    origin: process.env.FRONTEND_URL, // Use the production URL from .env
-    credentials: true
+// --- MIDDLEWARE SETUP ---
+
+// 1. CORS - To control which domains can access the API
+const corsOptions = {
+  origin: 'https://www.ulti-bot.com', // Allow requests from our frontend
+  credentials: true // This allows session cookies to be sent back and forth
+};
+app.use(cors(corsOptions));
+
+// 2. Express Session - To manage user sessions
+app.use(session({
+  secret: process.env.SESSION_SECRET, // Make sure to add this to the .env file
+  resave: false,
+  saveUninitialized: false,
+  store: MongoStore.create({
+    mongoUrl: process.env.MONGO_URI,
+    collectionName: 'sessions'
+  }),
+  cookie: {
+    secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
+    httpOnly: true, // Prevents client-side JS from reading the cookie
+    maxAge: 1000 * 60 * 60 * 24 // Cookie expires in 1 day
+  }
 }));
 
-// Add this before the session middleware to parse JSON bodies
+// 3. JSON Parser - To handle JSON payloads in requests
 app.use(express.json());
 
-app.use(session({
-    secret: process.env.SESSION_SECRET,
-    resave: false,
-    saveUninitialized: false,
-    store: MongoStore.create({ mongoUrl: process.env.MONGO_URI }),
-    cookie: {
-        secure: true, // Must be true for sameSite:'none' to work
-        httpOnly: true,
-        maxAge: 1000 * 60 * 60 * 24 * 7, // 1 week
-        sameSite: 'none', // Allows the cookie to be sent from a different domain
-        domain: 'ulti-bot.com' // Set the parent domain
-    }
-}));
 
-// --- 3. DATABASE CONNECTION ---
-mongoose.connect(process.env.MONGO_URI)
-    .then(() => console.log('✅ MongoDB connected successfully.'))
-    .catch(err => console.error('❌ MongoDB connection error:', err));
+// --- ROUTES ---
+app.get('/', (req, res) => {
+  res.send('Hello World! The API is running.');
+});
 
-// --- 4. IMPORT & USE ROUTES ---
-// Import the router files
-const authRoutes = require('./routes/auth');
-const stripeRoutes = require('./routes/stripe');
-const serverRoutes = require('./routes/servers'); // New route for servers
 
-// Tell the app to use the router files for specific paths
-app.use('/api/auth', authRoutes.authRouter);
-app.use('/api/users', authRoutes.usersRouter);
-app.use('/api/stripe', stripeRoutes);
-app.use('/api/servers', serverRoutes); // Use the new server routes
-
-// --- 5. START SERVER ---
+// --- START SERVER ---
 app.listen(PORT, () => {
-    console.log(`🚀 Users Service listening on port ${PORT}`);
+  console.log(`Server is listening on port ${PORT}`);
 });
