@@ -179,6 +179,7 @@ router.patch('/:serverId/modules/leveling', verifyServerAdmin, async (req, res) 
     const settings = req.body;
 
     try {
+        // This is a simpler and more direct way to update the nested object
         const result = await ServerConfig.updateOne(
             { serverId },
             { $set: { "modules.leveling": settings } }
