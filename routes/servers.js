@@ -180,21 +180,15 @@ router.patch('/:serverId/modules/leveling', verifyServerAdmin, async (req, res) 
     const newSettings = req.body;
 
     try {
-        // Create an update object with dot notation to set each field individually.
-        // This prevents overwriting the entire sub-document and preserves the 'enabled' field.
-        const update = {};
-        for (const key in newSettings) {
-            update[`modules.leveling.${key}`] = newSettings[key];
-        }
+        const config = req.serverConfig; // Get the full document from the middleware
 
-        const result = await ServerConfig.updateOne(
-            { serverId },
-            { $set: update }
-        );
+        // Merge the new settings into the existing leveling configuration.
+        // This preserves the 'enabled' field and any other fields not sent by the client.
+        Object.assign(config.modules.leveling, newSettings);
 
-        if (result.matchedCount === 0) {
-            return res.status(404).json({ message: 'Server not found.' });
-        }
+        // Save the entire updated document. Mongoose will validate the changes before saving.
+        await config.save();
+
         res.status(200).json({ message: 'Leveling settings updated.' });
     } catch (error) {
         console.error('Error updating leveling settings:', error);
