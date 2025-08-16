@@ -164,6 +164,7 @@ router.patch('/:serverId/modules/:moduleName', verifyServerAdmin, async (req, re
 router.get('/:serverId/modules/leveling', verifyServerAdmin, async (req, res) => {
     const config = req.serverConfig;
     
+    // The schema now provides defaults, but we ensure the object exists for safety.
     if (!config.modules.leveling) {
         config.modules.leveling = {}; 
         await config.save();
@@ -179,9 +180,16 @@ router.patch('/:serverId/modules/leveling', verifyServerAdmin, async (req, res) 
     const newSettings = req.body;
 
     try {
+        // Create an update object with dot notation to set each field individually.
+        // This prevents overwriting the entire sub-document and preserves the 'enabled' field.
+        const update = {};
+        for (const key in newSettings) {
+            update[`modules.leveling.${key}`] = newSettings[key];
+        }
+
         const result = await ServerConfig.updateOne(
             { serverId },
-            { $set: { "modules.leveling": newSettings } }
+            { $set: update }
         );
 
         if (result.matchedCount === 0) {
@@ -190,6 +198,10 @@ router.patch('/:serverId/modules/leveling', verifyServerAdmin, async (req, res) 
         res.status(200).json({ message: 'Leveling settings updated.' });
     } catch (error) {
         console.error('Error updating leveling settings:', error);
+        // Provide more specific error feedback for validation issues
+        if (error.name === 'ValidationError') {
+            return res.status(400).json({ message: error.message });
+        }
         res.status(500).json({ message: 'Error updating leveling settings.' });
     }
 });

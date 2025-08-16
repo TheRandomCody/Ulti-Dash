@@ -46,7 +46,8 @@ const serverConfigSchema = new mongoose.Schema({
         index: true
     },
     modules: {
-        leveling: { enabled: { type: Boolean, default: false } },
+        // FIXED: Replaced the simple inline object with the detailed levelingModuleSchema
+        leveling: levelingModuleSchema,
         economy: { enabled: { type: Boolean, default: false } },
         moderation: { enabled: { type: Boolean, default: false } },
         verification: { enabled: { type: Boolean, default: false } },
